@@ -45,11 +45,13 @@ The correct interpretation is that we are confident that the true population mea
 # Set up beetles vector
 beetles <- c(51, 45, 61, 76, 11, 117, 7, 132, 52, 149)
 ```
+
 a. What is the mean and the standard deviation of beetles per flower?
 ```{r}
 beetles_mean <- mean(beetles)
 beetles_sd <- sd(beetles)
 ```
+
 The mean is `r beetles_mean` and the standard deviation is `r beetles_sd`. 
 
 b. What is the standard error of the estimate of the mean?
@@ -63,7 +65,6 @@ c. Give an apprximate 95% confidence interval of the mean. Provide the lower and
 beetles_ci <- 2*beetles_se
 beetles_CI_low <- beetles_mean - beetles_ci
 beetles_CI_high <- beetles_mean + beetles_ci
-
 ```
 The lower CI limit is `r beetles_CI_low` and the standard deviation is `r beetles_CI_high`. 
 
@@ -71,7 +72,7 @@ d. If you had been given 25 data points instead of 10, would you expect the mean
 __same as__
 
 e. If you had been given 25 data points instead of 10, would you expect the standard deviation to be greater, less than, or about the same as the sample standard deviation?
-__greater than __
+__same as__
 
 f. If you had been given 25 data points instead of 10, would you expect the standard error to be greater, less than, or about the same as the sample standard error?
 __less than__
