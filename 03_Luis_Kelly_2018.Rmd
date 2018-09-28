@@ -1,0 +1,202 @@
+---
+title: "03_Luis_Kelly_2018"
+author: "Kelly Luis"
+date: "9/21/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**1)** Complete problems 10 and 17-18 on pg. 109-111. Use R where possible. Data sets (so you don’t have to type things in) are available at http://www.zoology.ubc.ca/~whitlock/ABD/teaching/datasets.html.
+
+10. Refer to the previous problem (Practice Problem 9).
+a. Using an approxmiate method, provide a rough 95% confidence interval for the population mean
+```{r}
+#Load Libraries
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(forcats)
+
+# Load Dataset
+gene_reg <- read_csv("data/04q11NumberGenesRegulated.csv")
+
+# Vectorize Dataset
+gene_vec <- rep(gene_reg$ngenes,gene_reg$frequency)
+
+#Visualise Data
+ggplot(as.data.frame(gene_vec), aes(x = gene_vec)) + geom_histogram()
+
+# Calculate Mean, Standard Deviation, and Standard Error
+f_mean <- mean(gene_vec)
+f_sd <- sd(gene_vec)
+f_se <- f_sd/sqrt(length(gene_vec))
+
+ci <- c(abs(f_se*2-f_mean),f_se*2+f_mean)
+```
+The correct interpretation is that we are confident that the true population mean lies between `r ci[1]` and `r ci[2]`  
+
+17. I think this is the correct interpretation. 
+
+18. 
+```{r}
+# Set up beetles vector
+beetles <- c(51, 45, 61, 76, 11, 117, 7, 132, 52, 149)
+```
+a. What is the mean and the standard deviation of beetles per flower?
+```{r}
+beetles_mean <- mean(beetles)
+beetles_sd <- sd(beetles)
+```
+The mean is `r beetles_mean` and the standard deviation is `r beetles_sd`. 
+
+b. What is the standard error of the estimate of the mean?
+```{r}
+beetles_se <- beetles_sd/sqrt(beetles)
+```
+The standard error of the mean is `r beetles_se`.
+
+c. Give an apprximate 95% confidence interval of the mean. Provide the lower and upper limits.
+```{r}
+beetles_ci <- 2*beetles_se
+beetles_CI_low <- beetles_mean - beetles_ci
+beetles_CI_high <- beetles_mean + beetles_ci
+
+```
+The lower CI limit is `r beetles_CI_low` and the standard deviation is `r beetles_CI_high`. 
+
+d. If you had been given 25 data points instead of 10, would you expect the mean to be greater, less than, or about the same as the sample mean?  
+__same as__
+
+e. If you had been given 25 data points instead of 10, would you expect the standard deviation to be greater, less than, or about the same as the sample standard deviation?
+__greater than __
+
+f. If you had been given 25 data points instead of 10, would you expect the standard error to be greater, less than, or about the same as the sample standard error?
+__less than__
+
+**2.1)** Load the data using `readr` and make the `Month_Names` column into a factor whose levels are in order of month using `forcats::fct_inorder`. Use `levels()` - a function that takes a factor vector and returns the unique levels - on the column. Are they in the right order?
+
+```{r load}
+theme_set(theme_bw(base_size=12))
+
+# Read CSV file 
+ice <- read_csv("data/NH_seaice_extent_monthly_1978_2016.csv") %>%
+  # Add column with month names
+  mutate(Month_Name = factor(Month_Name)) %>%
+  # Use fct_inorder to order months
+  mutate(Month_Name = fct_inorder(Month_Name))
+
+# Check if months are in order
+levels(ice$Month_Name)
+```
+__Levels(ice$Month_Name) showed that fct_inorder did not order the months from Jan-Dec.
+
+**2.2)**  Try `fct_rev()` on `ice$Month_Name` (I called my data frame `ice` when I made this). What is the order of factor levels that results? Try out `fct_relevel()`, and last, `fct_recode()` as well. Look at the help files to learn more, and in particular try out the examples. Use these to guide how you try each functino out. After trying each of these, `mutate` month name to get the months in the right order, from January to December. Show that it worked with `levels()`  
+Note, if you don't want a lot of output to be spit out, you can do something like `levels(fct_rev(ice$Month_Name))`.
+
+
+```{r futz}
+levels(fct_rev(ice$Month_Name))
+levels(fct_relevel(ice$Month_Name, "Apr","May"))
+levels(fct_recode(ice$Month_Name, Month = "Feb"))
+
+ice <- ice %>%
+  mutate(Month_Name = fct_relevel(Month_Name, 
+                                  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+
+levels(ice$Month_Name)
+
+```
+__fct_rev reverses the order of the levels(ice$Month_Name) output__
+__fct_relevel() moved April and May to the front of the vector__
+__fct_recode changed the month name "Feb" in the levels vector into "Month". 
+
+**2.3)** Now, using what you have just learned about `forcats`, make a column called `Season` that is a copy of `Month_Name`. Use the function  `fct_recode` to turn it into a factor vector with the levels Winter, Spring, Summer, Fall in that order. Use `levels()` on `ice$Season` to show that it worked.
+
+```{r}
+# Add a column with seasons
+ice <- ice %>%
+  mutate(Season = fct_recode(Month_Name,
+                             Winter = "Jan", Winter = "Feb", Spring = "Mar", Spring = "Apr", 
+                             Spring = "May", Summer = "Jun",
+                                 Summer = "Jul", Summer ="Aug", 
+                             Fall = "Sep",Fall =  "Oct", Fall = "Nov", Winter = "Dec"))
+
+# Check if levels are in order by season
+levels(ice$Season)
+
+```
+
+**2.4)** Make a boxplot showing the variability in sea ice extent every month.
+
+```{r boxplot}
+p_box <- ggplot(data = ice,
+       mapping = aes(x = Month_Name, y = Extent)) + 
+       xlab("Month") +
+       ylab("Sea Ice Extent") +
+  geom_boxplot()
+
+p_box
+```
+
+**2.4)** Use `dplyr` to get the annual minimum sea ice extent. Plot minimum ice by year, and add a trendline (either a smooth spline or a straight line).
+
+```{r trend}
+ice_summary <- ice %>%
+  group_by(Year) %>%
+  summarize(min_extent = min(Extent))
+
+ggplot(ice_summary,
+       aes(x = Year, y = min_extent)) +
+  geom_point() +
+  ylab("Minimum Sea Ice Extent") + 
+  stat_smooth(method = "lm")
+```
+
+
+**2.5)** With the original data, plot sea ice by year, with different lines for different months. Then, use `facet_wrap` and `cut_interval(Month, n=4)` to split the plot into seasons.
+
+```{r byyear}
+p_seasonal <- ggplot(data = ice,
+       mapping = aes(x = Year, y = Extent, group = Month)) +
+  geom_line()
+
+p_seasonal + facet_wrap(~cut_interval(Month, n = 4))
+```
+
+
+**2.6)** Last, make a line plot of sea ice by month with different lines as different years. Gussy it up with colors by year, a different theme, and whatever other annotations, changes to axes, etc., you think best show the story of this data. For ideas, see the lab.
+
+```{r fun}
+library(viridis)
+
+p_annual <- ggplot(data = ice,
+       mapping = aes(x = Month_Name, y = Extent, color = Year,
+                     group = Year)) +
+  geom_line() +
+  scale_color_viridis(option = "E") +
+  scale_x_discrete(expand=c(0,0))
+
+p_annual
+```
+
+**2.7 Extra Credit)** Make it animated with `gganimate`. Just like above. See the lab for more.  
+  
+```{r anim}
+library(gganimate)
+
+p_annual +
+  transition_time(Year)
+
+p_annual +
+   transition_reveal(Year, along = Year) 
+  
+```
+
+**2.8 Extra Credit)** Use the data and make something wholly new and awesome. Even extra extra credit for something amazing animated.
+  
+**3 Extra Credit)** Go to the internet, and find a package with some cool theme you want to use in ggplot2. Use it with one of the above plots. The cooler the theme, the more points we'll give!
+Note - this guy - http://byrneslab.net/project/hensel/ - is in charge of deciding how cool it is.  
