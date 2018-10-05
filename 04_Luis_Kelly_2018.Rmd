@@ -103,10 +103,8 @@ ggplot(sim) +
 OK, now that you've done that, calculate the results from z-tests. Plot p by sample size, using `facet_wrap` for different SD values.
 ```{r z_test}
 sim_z <- sim %>%
-  # Group by Sample Size and SD
-  group_by(samp_size,sd) %>% 
   # Calculate Z 
-  mutate(z = (sample_mean-pop_mean)/(pop_sd/sqrt(samp_size))) %>% 
+  mutate(z = (sample_mean-pop_mean)/(sd/sqrt(samp_size))) %>% 
   # Calculate P 
   mutate(p = 2*pnorm(abs(z), lower.tail=FALSE))
 
@@ -134,7 +132,8 @@ ggplot(sim_power) +
   geom_point() + geom_line() +theme_bw(base_size=17) +
   # Include threshold power of 0.8
   geom_hline(yintercept=power_threshold, lty=2) +
-  scale_color_discrete(name = "SD") +
+  #scale_color_discrete(name = "SD") +
+  scale_color_manual(values = beyonce_palette(82)) +
   xlab("Sample Size") +
   ylab("Power")
 
@@ -159,13 +158,15 @@ ggplot(sim_alpha) +
   geom_point() + geom_line() +
   xlab("Sample Size") +
   ylab("Power") +
-  scale_color_discrete(guide = guide_legend(title=expression(alpha)))
+scale_color_manual(values = beyonce_palette(82)) 
+#scale_color_discrete(guide = guide_legend(title=expression(alpha)))
 ```
 
 
 #### 3.5) What does it all mean? What do you learn about how alpha and SD affect power? 
-We know that increasing our sample size and increasing our alpha value increases the power of our test, but the size of SD doesn't have a noticable effect on the power analysis.
+We know that increasing our sample size and increasing our alpha value increases the power of our test, but increasing SD decreases our power. 
 
 #### 3.6) How do you think that changing the effect size would affect power? 
 You can just answer this without coding out anything. Based on what we've learned so far - what do you think?
+The effect size is the standardized mean difference between the control and experimental group. Thus, I think increasing the effect size our power increases because increased effect size is the result of lower SD. 
 
