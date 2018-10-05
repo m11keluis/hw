@@ -1,0 +1,171 @@
+---
+title: "04_Luis_Kelly"
+author: "Kelly Luis"
+date: "10/2/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load Libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(beyonce)
+```
+### 1) W&S Chapter 6 questions 15, 21, and 29
+15. For the following alternative hypotheses give the appropriate null hypothesis:
+a. Pygmy mammoths and continental mammoths have thes same mean femur lengths. 
+b. Patients who take phentermine and topiramate lose weight at the same rate as control patients without these drugs.
+c. Patients who take phentermine an topiramate have the same proportions of their babies born with cleft palates as patients not taking these drugs. 
+d. Shoppers on average buy the same amount of candy when Christmas music is playing in the shop as when the usual type of music is playing. 
+e. The presence or absence of females do not effect the occurence of male white-collared manakins dancing. 
+
+21. Imagine that two researchers independently carry out clinical trials to test the same null hypothesis, that COX-2 selective inhibitors (which are used to treat arthritis) have no effect on the risk of cardiac arrest. They use the same population for their study, but one experimenter uses a sample size of 100. Assume that all other aspects of the studies, including significance levels, are the same between the two studies. 
+a. The 60-participant study has the higher probability of commiting a Type II error because with less samples you have a higher probability of rejecting a false null hypothesis.
+b. The 100-particiant study has higher power because it has a lower probability of a random sample leading to the rejection of false null hypothesis. 
+c. The 100-participant study has the higher proability of commiting a Type I error because with increased samples you have a higher probability of rejecting a true null hypothesis. 
+d. A one tailed test can be conducted because the alternative hypothesis is that the COX-2 selective inhibitors effect the risk of cardiac arrest and from what I understand we do not care about the significance of the effect (which would then require a two-tailed test)
+
+29. A team of researchers conducted 100 independent hypothesis tests using a significance level of alpha = 0.05:
+a. If all 100 null hypotheses are true, what is the probability that the researchers would reject none of them? Pr[0] = `r 0.05^0 * 0.95^100`
+b. If all 100 null hypotheses are true, how many of these tests on average are expected to reject the null hypothesis? Since the significance level is set at 5%, we are expected to reject 5 tests. 
+
+### 2) W&S Chapter 7 question 22 - use R to calculate a p-value
+22. In a test of Murphy's law, pieces of toast were buttered on one side and then dropped. Murphy's law predicts that they will land butter-side down. Out of 9821 slices of toast dropped, 6101 landed butter side down.
+
+a. What is the a 95% confidence interval for the probability of a piece of toast landing butter side down?
+```{r}
+# Assign Variables
+drop_num <- 9821
+but_down <- 6101
+
+# Calculate Proportion
+prop_down <- but_down/drop_num
+
+# Calculate Standard Error of Proportion
+prop_se <- sqrt((prop_down*(1-prop_down))/but_down)
+
+# Calculate proportion prime for Agresti-Coull Method
+prop_prime <- (but_down+2)/(drop_num+4)
+
+# Calculate upper and lower CI bounds
+CI_low <- prop_prime - 1.96*sqrt((prop_prime*(1-prop_prime))/(drop_num + 4))
+CI_high <- prop_prime + 1.96*sqrt((prop_prime*(1-prop_prime))/(drop_num + 4))
+
+# Sanity Check with Binomial Test
+binom.test(x = but_down, p = 0.5, n = drop_num)
+```
+
+b. Using the result of part (a), is it plausible to that there is a 50:50 chance of the toast landing butter side down or butter side up?
+Unlikely because a 50:50 (0.5) chance does not fall in between `r CI_low` and `r CI_high`
+
+c. Calculate P-Value
+``` {r}
+2*pbinom(but_down, size = drop_num, prob = 0.5, lower.tail=FALSE)
+```
+
+
+#### 3.1) Start up your simulation
+Make a simulated data frame to look at the effects of multiple sample sizes: from 1-20, with 500 simulations per sample size, and also multiple SD values, from 3 through 10 (just 3:10, no need for non-integer values). You're going to want `crossing` with your intitial data frame of just sample sizes and a vector of sd values to start. Then generate samples from the appropriate random normal distribution.
+
+```{r sim_setup}
+# Assign Variables
+pop_mean <- 80 
+pop_sd <- 6
+null_hypo <- 85
+power_threshold <- 0.8
+
+# Create Data Frame for Sample Sizes
+sim <- data.frame(samp_size = rep(1:20, 500)) %>% 
+  # Use Crossing for SD vector
+  crossing(sd = seq(from = 3, to = 10, by = 1)) %>% 
+  # Group by Simulation Number 
+  group_by(sim_num = 1:n()) %>% 
+  # Generate Random Normal Distribution
+  mutate(sample_mean = mean(rnorm(samp_size, null_hypo, pop_sd))) %>%
+  ungroup()
+
+# Plot Random Normal Distribution by Sample Size
+ggplot(sim) +
+  geom_point(alpha=0.6, size=3, mapping=
+  aes(x=samp_size, y=sample_mean)) +
+  theme_bw(base_size=17) +
+  xlab("Sample Size") + ylab("Mean BPM of Sample") +
+  geom_hline(yintercept=80, color="red", lty=2, lwd=2) 
+
+```
+
+#### 3.2) Z!
+OK, now that you've done that, calculate the results from z-tests. Plot p by sample size, using `facet_wrap` for different SD values.
+```{r z_test}
+sim_z <- sim %>%
+  # Group by Sample Size and SD
+  group_by(samp_size,sd) %>% 
+  # Calculate Z 
+  mutate(z = (sample_mean-pop_mean)/(pop_sd/sqrt(samp_size))) %>% 
+  # Calculate P 
+  mutate(p = 2*pnorm(abs(z), lower.tail=FALSE))
+
+# Plot p by sample size for different SD values
+  ggplot(data = sim_z, mapping = aes(x=samp_size, y=p)) +  
+    geom_jitter(alpha = 0.4) + 
+    facet_wrap(~sd) +
+    xlab("Sample Size") +
+    ylab("Z Value") 
+```
+
+#### 3.3) P and Power
+Now plot power for an alpha of 0.05, but use color for different SD values. Include our threshold power of 0.8.
+
+```{r power}
+# Calculate power for an alpha of 0.05 for each SD value
+sim_power <- sim_z %>%
+  group_by(samp_size,sd) %>%
+  summarise(power = 1-(sum(p>0.05)/n())) %>% 
+  ungroup()
+
+# Plot Power for an alpha of 0.05
+ggplot(sim_power) +
+  aes(x = samp_size, y = power, color = factor(sd)) +
+  geom_point() + geom_line() +theme_bw(base_size=17) +
+  # Include threshold power of 0.8
+  geom_hline(yintercept=power_threshold, lty=2) +
+  scale_color_discrete(name = "SD") +
+  xlab("Sample Size") +
+  ylab("Power")
+
+```
+
+#### 3.4) Many alphas
+Last, use `crossing` again to explore changing alphas from 0.01 to 0.1. Plot power curves with different alphas as different colors, and use faceting to look at different SDs. 
+
+```{r sim_alpha}
+sim_alpha <- sim_z %>% 
+  # Combine vector of alphas from 0.01 to 0.1 with simulation data
+  crossing(alpha = seq(from = 0.01, to = 0.1, by = 0.01)) %>% 
+  #Calculate power for each alpha
+  group_by(samp_size, sd, alpha) %>%
+  summarise(power = 1-sum(p>alpha)/n()) %>%
+  ungroup()
+```
+
+```{r plot_tradeoff}
+ggplot(sim_alpha) +
+  aes(x=samp_size, y=power, color=factor(alpha)) + facet_wrap(~sd) +
+  geom_point() + geom_line() +
+  xlab("Sample Size") +
+  ylab("Power") +
+  scale_color_discrete(guide = guide_legend(title=expression(alpha)))
+```
+
+
+#### 3.5) What does it all mean? What do you learn about how alpha and SD affect power? 
+We know that increasing our sample size and increasing our alpha value increases the power of our test, but the size of SD doesn't have a noticable effect on the power analysis.
+
+#### 3.6) How do you think that changing the effect size would affect power? 
+You can just answer this without coding out anything. Based on what we've learned so far - what do you think?
+
