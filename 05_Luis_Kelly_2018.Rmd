@@ -1,0 +1,352 @@
+---
+title: "T-Test and Chisq Homework"
+author: "Biol 607"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Classes/Fall2018/Biol607/hw/data/', echo = FALSE)
+
+```
+
+Note: Datasets are available at http://whitlockschluter.zoology.ubc.ca/data so you don't have to type anything in (and have to load it!)  
+\
+
+## 1. W&S $\chi^2$ questions
+Please answer W&S Chapter 8 Questions 12 and 24, and Chapter 9 Questions 16 and 27. User R where possible.
+
+### Chapter 8 - Question 12
+```{r}
+# Load Libraries
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(beyonce)
+library(tidyr)
+
+# Extract raw Bear Genetics Data
+bear_raw <- read_csv("chap08q12SpiritBearGenetics.csv")
+head(bear_raw)
+
+# Extract BB, bb, Bb counts 
+bear_table <- table(bear_raw)
+bear_table <- data.frame(Frequency = bear_table)
+
+# Visualize Bear Data 
+bear_bar <- ggplot(data.frame(bear_raw), aes(x=bear_raw$genotype)) +
+  geom_bar() +
+  xlab('Genotype') + ylab('Count')
+
+# A. Calculate Proportion of b allele 
+b_count <- bear_table$Frequency.Freq[bear_table$Frequency.bear_raw == 'bb']*2 +bear_table$Frequency.Freq[bear_table$Frequency.bear_raw == 'Bb']
+tot_count <- sum(bear_table$Frequency.Freq)*2
+
+# Fraction of alleles being b (or the probability of selecting an allele pair with a b)
+one_frac <- round(b_count/tot_count, digits = 2)
+
+# B. Calculate Expected Frequency of Bears with 0, 1, and 2 copies
+distr <- round(dbinom(0:2, size = 2, prob = one_frac),2)
+bear_table$expected <- round(distr*sum(bear_table$Frequency.Freq), digits = 2)
+
+# C. Compare Expected and Observed Frequencies
+bear_finalplot <- melt(bear_table,id.vars = "Frequency.bear_raw")
+
+ggplot(bear_finalplot, aes(x = Frequency.bear_raw, y =value, fill = variable)) +
+  geom_col(stat = "identity",position = "dodge") +
+  xlab('Genotype') +
+  ylab('Count') +
+  scale_fill_manual(labels = c("Observed","Expected"), values = beyonce_palette(72)) +
+  theme_bw()
+```
+The expected frequency for bb and BB genotypes are larger than observed. 
+
+### Chapter 8 - Question 24
+```{r}
+# Extract raw dodder data
+dodder_raw <- read_csv("chap08q24DodderGrowth.csv")
+dodder_raw$directionOfGrowth <- factor(dodder_raw$directionOfGrowth, levels = c("away from volatile","left","right","toward volatile"))
+dodder_table <-table(dodder_raw)
+head(dodder_table)
+dodder_table <- data.frame(Frequency = dodder_table)
+
+# A. Graph Relative Frequency 
+dodder_table$observed <- dodder_table$Frequency.Freq/sum(dodder_table$Frequency.Freq)
+
+dodder_observed <- ggplot(data = dodder_table, aes(x=Frequency.dodder_raw, y = observed)) +
+  geom_bar(stat = 'identity') +
+  xlab('Direction of Growth') + ylab('Relative Frequency') + theme_bw()
+
+# B. What are the relative frequencies expected if the parasite is unable to detect the plant volatiles or any other cues present? Add these expected relative frequencies to your graph in part A.
+dodder_table$expected <- c(0.25,0.25,0.25,0.25)*sum(dodder_table$observed)
+
+dodder_plot <- melt(dodder_table, ids.var = 'directionOfGrowth', measure.vars = c('observed','expected'))
+
+ggplot(dodder_plot, aes(x = Frequency.dodder_raw, y =value, fill = variable)) +
+  geom_col(stat = "identity",position = "dodge") +
+  xlab('Direction of Growth') +
+  ylab('Relative Frequency') +
+  scale_fill_manual(values = beyonce_palette(5)) +
+  theme_bw()
+
+# D. Provide a standard error for your estimate. What does this standard error represent?  
+volatile_vec <- c(dodder_table$observed[dodder_table$Frequency.dodder_raw == "toward volatile"],dodder_table$expected[dodder_table$Frequency.dodder_raw == "toward volatile"])
+se_volatile <- sd(volatile_vec)/sqrt(length(volatile_vec))
+
+# E. Calculate the range of most plausible values for the fraction of dodder seedlings that grow toward the volatiles under these experimental conditions. Does it include or exclude the fraction expected if the parasite is unable to detect plant volatiles or other cues present? 
+
+library(binom)
+binom.confint(x = dodder_table$observed, n = 30, method = "ac")
+```
+
+B. If the parasite were unable to detect the volatiles or any other cues present, the probability of a seedling growing into any quadrant would be equal (i.e. 0.25, 0.25, 0.25, 0.25). 
+
+C. The fraction of seedlings growing towards the quadrant would be 0.25. 
+
+D. Very low confidence about this one, but I took the standard error of the observed and expected values from toward volatile (n = 2) and I got `r se_volatile`. I know the standard error is supposed to represent the standard deviation of a population of estimates of a parameter and in this case it's representing the the error in estimating the fraction of seedlings growing towards the volatile. 
+
+E. Not confident about my confidence intervals (hehe); however, using the agresti-couli method I calculated the confidence intervals for all of the observed fractions and we see that the CI for towards the volatiles excludes the expected fraction. 
+
+### Chapter 9 - Question 16
+```{r}
+# Extract Prairie Data and Make Table
+prairie_raw <- read_csv('chap09q16PrairieDogMultipleMating.csv')
+head(prairie_raw)
+prairie <- table(prairie_raw$matingFrequency, prairie_raw$gaveBirth)
+
+# Chi Squared Test
+prairie_chi <- chisq.test(prairie_raw$matingFrequency, prairie_raw$gaveBirth)
+
+# A) Calculate Expected Frequencies for a Contingency Test
+prairie_chi$expected
+
+```
+
+b. No, more than 20% of the cells have frequency less than five. Grouping the mating frequecies by 1-2 and 3-5 times would help. 
+
+c. Female prairie dog mate with more males, increasing fertilizaiton probability, and increasing the probability of giving birth.
+
+### Chapter 9 - Question 27
+```{r}
+# Extract and View Data
+widow_raw <- read_csv('chap09q27WidowHealth.csv')
+head(widow_raw)
+widow <- table(widow_raw$health_deterioration, widow_raw$widowed)
+widow
+addmargins(widow)
+
+# Chi-Squared Data
+widow_chi <- chisq.test(widow_raw$health_deterioration, widow_raw$widowed, correct=FALSE)
+widow_chi
+
+```
+This P-value is 0.003374, so we can say with some confidence that the probability of health deterioration is related to whether a wife is widowed or not.
+
+## 2. W&S t-test questions  
+Please Answer W&S Chapter 11 Question 21 and Chapter 12 Questions 20, 26, and 30
+
+### Chapter 11 - Question 21
+```{r}
+library(beyonce)
+hurricane_raw <- read_csv('chap11q21SoilLeadAndHurricanes.csv')
+head(hurricane_raw)
+
+# A) Draw Graph
+ggplot(hurricane_raw, aes(x = LogRatio)) +
+  geom_histogram(binwidth = 0.20) +
+  xlab('Log Ratio') + ylab('Frequency') 
+
+# B) Determine the most plausible range of values for the mean change in soil lead
+conf95 <- t.test(hurricane_raw$LogRatio)$conf.int
+
+# C) Test whether mean soil lead changed after the hurricanes
+ttest_soil <- t.test(hurricane_raw$LogRatio)
+```
+A) The histogram shows more of the log ratio bins are less than zero, indicating a decrease in soil lead concentration
+B) I calculated the 95% confidence interval of the mean, so the most plausible range would be between `r conf95[1]` and `r conf95[2]`. These results are consistent with a decrease in soil lead after the hurricane.
+ C) Low p value (`r ttest_soil$p.value`) and 95% CI of the mean less than zero indicates a decrease in soil lead after the hurricane 
+
+### Chapter 12 - Question 20 
+```{r}
+fish_raw <- read_csv("chap12q20ElectricFish.csv")
+head(fish_raw)
+
+# A) Calculate Mean Difference 
+fish_raw$diff <- fish_raw$speciesUpstream-fish_raw$speciesDownstream
+diff_viz <- stripchart(fish_raw$diff, pch=20, col="darkred", method="stack",
+xlab="Difference in number of electric fish species")
+diff_viz2 <-boxplot(fish_raw$diff, horizontal=TRUE, col="honeydew")
+
+# Calculate CI
+fish_CI <- t.test(fish_raw$diff)$conf.int
+
+# B) Test the Hypothesis
+fish_ttest <-t.test(fish_raw$diff)
+fish_ttest
+```
+B) With a p-value at `r fish_ttest$p.value`, tributaries have no effect on the number of species electric fish. 
+
+C) Assumptions: 1) pairs normally distributed 2) pairs are randomly sampled from a population
+
+### Chapter 12 - Question 26
+```{r}
+hyenas_raw <- read_csv("chap12q26HyenaGiggles.csv")
+head(hyenas_raw)
+
+# Calculate Mean Difference
+hyenas_raw$diff <- hyenas_raw$dominantIndividualGiggleVariation - hyenas_raw$subordinateIndividualGiggleVariation
+head(hyenas_raw)
+
+# Calculate CI
+hyena_CI <- t.test(hyenas_raw$diff)$conf.int
+
+# Calculate T Test
+hyena_ttest <-t.test(hyenas_raw$diff)
+hyena_ttest
+```
+The dominant and subordinate individuals differ in mean giggle (p-value = `r hyena_ttest$p.value`).
+
+### Chapter 12 - Question 30 
+The researchers are indirectly comparing both groups (i.e. parental offspring vs. cuckolder offspring) to the same null hypothesis. They should instead determine if the mean discrimination of offspring from parental males is different from the mean discrimination of offspring from cuckolder males.
+  
+## 3. Power and T
+
+In class, we worked through an example of power via simulation for a two-sample t-test with equal variance and sample size. Let's go through a similar exercise, but this time, assuming we have a situation with both different sample sizes and variances.
+
+### 3.1 Data Generating Process
+
+Write a function that takes two means, two standard deviations, and two sample sizes as arguments. Have it return a data frame or tibble based on the inputs ready to go for a t-test!
+```{r make_t_data}
+ 
+# Write T Function
+make_t_data <- function(m1, m2, s1, s2, n1, n2){
+  #make a data frame, repeating treatments n number of times
+  #and use rnorm to get values
+  data.frame(treatment = c(rep("A", n1), rep("B", n2)),
+             value = rnorm(n = n1 + n2, 
+                           mean = c(rep(m1,n1), rep(m2, n2)),
+                           sd = c(rep(s1,n1), rep(s2,n2))),
+             stringsAsFactors = FALSE)
+}
+
+# Test Function
+tdata_test <- make_t_data(6,7,3,4,9,10)
+tdata_test
+```
+
+
+### 3.2 P From T
+
+Write a function that takes a data frame and runs a two-tailed t-test with the variances assumed to be unequal. Show it works by comparing it's p-value to that returned by `t-test` for the same simulated data set. Note, if you gave particular column names in the function from 3.1, you should use those here! If you are stumped on how to get a p-value, look at the help file for `t.test`, remembering that the output from `t.test` is a list! **+2 Extra credit, look at `?ifelse` or `?"if"` and use one of them to have your function choose to use unequal variances if your variances differ by 20%.** 
+```{r get_p_from_t_test}
+get_p_from_t_test <- function(dataset){
+  #run the t test on the data
+  test <- t.test(value~ treatment, data = dataset, var.equal = FALSE)
+  test$p.value
+}
+
+# If & Else Test
+get_p_from_t_test_new <- function(dataset){
+  # Calculate Variances for Each Input
+  vA <- var(dataset$value[dataset$treatment == "A"])
+  vB <- var(dataset$value[dataset$treatment == "B"])
+  # Determine if Variances differ by 20%
+  pdiff <- (abs(vA-vB))/vA
+  if (pdiff > 20){
+  #run the t test on the data
+  test <- t.test(value ~ treatment, data = dataset, var.equal = FALSE)
+  test$p.value
+  }else {
+    test <-t.test(value ~treatment, data = dataset, var.equal = TRUE)
+  test$p.value
+  }
+}
+
+
+```
+
+### 3.3 So many Ps!
+
+Write a function that takes takes some number of simulations, two means, two standard deviations, and two sample sizes as arguments and returns a vector of p values equal in length to that number of simulations. It should call your functions from 3.1 and 3.2 using `replicate()` or `purrr::rerun()` or some other strategy to do something many times. Your call! **Extra credit - try it different ways and show using a large number of simulations and `system.time()` or the `profileR` package which way is faster.
+
+```{r}
+library(purrr)
+p_vec <- function(nsims = 100, m1, m2, s1, s2, n1, n2){
+replicate(nsims,
+          get_p_from_t_test(make_t_data(m1, m2, s1, s2, n1, n2)))
+}
+p_vec2 <- function(nsims = 100, m1, m2, s1, s2, n1, n2){
+rerun(nsims,
+          get_p_from_t_test(make_t_data(m1, m2, s1, s2, n1, n2)))
+}
+
+# Time p_vec functions
+pvec_test <- system.time(p_vec(10,6,7,3,4,9,10))
+pvec2_test <- system.time(p_vec2(10,6,7,3,4,9,10))
+
+```
+Rerun was quicker than replicate
+
+### 3.4 I have the power
+
+Write a function that takes an alpha value, some number of simulations, two means, two standard deviations, and two sample sizes as argument, and returns the power. It should call the function you wrote in 3.3. Now, make sure this works by comparing your results to the appropriate call to `power.t.test()`. Do they agree? Why or why not?
+
+```{r get_t_power}
+get_t_power <- function(alpha = 0.05, nsims, m1, m2, s1, s2, n1, n2){
+  p <- p_vec(nsims, m1, m2, s1, s2, n1, n2)
+  #calculate the number of p values that are incorrect given
+  #that we should be rejecting the null
+  num_wrong <- sum(p > alpha)
+  
+  #return power
+  1 - num_wrong/nsims
+}
+
+# Test Function
+t_man <- get_t_power(0.07,100,3,5,1,1,2,3)
+t_man
+# Test Against power.t.test
+t_auto <- power.t.test(n = 5,
+                        sig.level = .07,
+                       delta = 2,
+                        type = "two.sample",
+                        alternative = "two.sided"
+                        )
+t_auto
+
+t_auto2 <- power.t.test(n = 5,
+                       sig.level=.07,
+                       power=t_man,
+                       type="two.sample",
+                       alternative="two.sided")
+
+t_auto2
+
+```
+
+The get_t_power function result (`r t_man`) differs from the power.t.test function (`r t_auto`). 
+
+### 3.5 Show it works
+
+Using your functions from above, explore how changing the difference between the the means of two groups interacts with the difference between two standard deviations of groups to affect the power of a t-test. Explain the results you produce. **+1 Extra credit for using a color scheme from the `wesanderson` or `beyonce` package that is illuminating.** 
+
+```{r}
+pow_df <- crossing(m_diff = 1:5, s_diff = 1:5, n_diff = 5:10) %>%
+  rowwise() %>%
+  mutate(power = get_t_power(0.07,100, m1 = 0, m2 = m_diff, s1 = 0, s2 = s_diff, n1 = 4, n2 = n_diff)) %>%
+  ungroup()
+
+ggplot(pow_df, aes(x=n_diff, y = power, color = factor(m_diff))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~s_diff) +
+  scale_color_manual(values = beyonce_palette(79)) 
+
+```
+
+### 3.6 Extra Credit
+
++2 Extra credit if you include a comparison between running the test with versus without equal variances - this might require you to re-write your function from 3.2 to include an argument where you specify if you want equal or unequal variance tests to be used. **+1 additional extra credit for folding this into your auto-detect unequal variance function from above, but have this argument override the automatic detection of equal or unequal variances. Lots of ways to do this, some more efficient than others.**
+
+## 4. Extra Credit on Contingency Tables (3 points)
+Write a function that takes a count data frame in with 2 columns of categorical predictors (characters) and 1 of counts, and returns a $\chi^2$ test for the appropriate contingency table. +1 more if it also outputs the contingency table. +3 more if it works for an n x n x n x n x .... contingency table. Show it works by comparing the results to using `xtabs()` and `chisq.test()`. You should look at the formulae in W&S here to help you.

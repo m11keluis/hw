@@ -1,0 +1,313 @@
+---
+title: "Correlation And Regression Homework"
+author: Kelly Luis
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(ggplot2)
+library(broom)
+library(modelr)
+```
+
+Note: Datasets are available at http://whitlockschluter.zoology.ubc.ca/data so you don't have to type anything in (and have to load it!)  
+
+## 1. Correlation - W&S Chapter 16
+
+###Questions 15
+```{r C16_Q15}
+# Download Data
+gray <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter16/chap16q15LanguageGreyMatter.csv"))
+
+# A. Display association between the two variables in a scatter plot
+ggplot(data = gray, aes(x=proficiency, y=greymatter)) +
+  geom_point() +
+  xlab("Proficiency score for second language") +
+  ylab("Gray-matter density (mm^3/voxel")
+
+# B. Calculate the correlation between second language proficiency and gray matter density
+grayCor <- cor.test(gray$greymatter,gray$proficiency)
+grayCor$estimate
+  
+```
+C. Test the null hypothesis
+We can reject the null hypothesis because the correlation coefficient is greater than 0 (`r grayCor$estimate`). 
+
+D. What are you assumptions for part c?
+1) Random Sample from a Normal Population
+2) Bivariate Normal Distribution - Bell shaped normal distribution in two dimensions
+
+E. Does the scatter plot support these assumptions?
+The scatter plot indicates a bivariate normal distribution where the relationship between X and Y is linear, cloud of points have a ellipitcal shape, and the frequency distribution of X and Y separately appear normal
+
+
+
+###Questions 19
+```{r C16_Q19}
+#Load Data
+rat <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter16/chap16q19LiverPreparation.csv"))
+
+# A. Calculate the correlation coefficient between the taurocholate unbound fraction and the concentration
+ratCor <- cor.test(rat$unboundFraction,rat$concentration)
+ratCor$estimate
+
+# B. Plot the relationship between the two variables in a graph
+ggplot(data = rat, aes(x = concentration, y = unboundFraction)) + 
+  geom_point() +
+  xlab("Concentration (microMole)") +
+  ylab("Unbound Fraction")
+
+```
+C. Examine the plot in part (b). The relationship appears to be maximally strong, yet the correlation coefficient you calculated in part (a) is not near the maximum possible value. Why not? 
+It doesn't near maximum because it is not a linear relationship. 
+
+D. What steps would you take with these data to meet the assumptions of correlation analysis? I would transform the data with an arcsine transformation because we are working with fractions. 
+
+## 2. Correlation SE
+
+Consider the following dataset:
+
+```{r make_data}
+set.seed(20181011)
+library(mnormt)
+
+mat <- rmnorm(10, varcov = matrix(c(1,0.3, 0.3, 1), ncol=2)) %>%
+  round(2) %>%
+  as.data.frame %>%
+  rename(cats = "V1", happiness_score = "V2")
+
+knitr::kable(mat, "html") %>% kableExtra::kable_styling("striped")
+
+```
+
+### 2a.
+Are these two variables correlated? What is the output of `cor()` here. What does a test show you?
+
+```{r, eval=FALSE}
+matCor <- cor.test(mat$cats, mat$happiness_score)
+```
+
+
+### 2b.
+What is the SE of the correlation based on the info from `cor.test()`
+```{r, eval=FALSE}
+provided <- (0.7877084 - 0.3136313 )/2
+provided
+se_man <- sqrt((1-(matCor$estimate^2))/(length(mat$cats-2)))
+se_man
+```
+
+### 2c.
+Now, what is the SE via simulation? To do this, you'll need to use `cor()` and get the relevant parameter from the output (remember - you get a matrix back, so, what's the right index!), `replicate()`, and `sample()` or `dplyr::sample_n()` with `replace=TRUE` to get, let's say, 1000 correlations. How does this compare to your value above?
+
+```{r}
+ses <- replicate(1000, cor(sample_n(mat, nrow(mat), replace=TRUE))[1,2])
+
+sd(ses)
+
+#Similar - a hair larger.
+
+```
+
+
+## 3. W&S Chapter 17
+
+###Questions 19, 30, 31
+```{r C17_Q19}
+#Load Data
+grassland <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q19GrasslandNutrientsPlantSpecies.csv"))
+
+# A. Plot Scatter Plot
+plot(species ~ nutrients, data = grassland)
+
+ggplot(grassland, aes(nutrients, species)) +
+  geom_point() +
+  xlab("Number of Nutrients Added") +
+  ylab("Number of Plant Species")
+
+# B. What is the rate of change in the number of plant species supported per nutrient type added? Provide the standard error for your estimate
+grasslandReg <- lm(species~nutrients, data = grassland)
+# Rate of change in the number of plant species supported per nutrient type added?
+coefGrass <- coef(grasslandReg)
+
+# Standard error for your estimate
+summary(grasslandReg)
+grassSum <- tidy(grasslandReg)
+
+# C. Add the least squares regression line to your scatter plot. What fraction of the variation in the number of plant species is "explained" by the number of nutrients added?
+grassFrame <- data.frame(coefGrass)
+
+ggplot(grassland, aes(nutrients, species)) + 
+  geom_point() +
+  geom_abline(data = grassFrame, aes(slope = grassFrame$coefGrass[2], intercept = grassFrame$coefGrass[1]), alpha = 0.5 )
+
+
+```
+
+A. Species is the response variables because we are determining if the number of nutrients impacts the number of species present 
+
+B. Rate of change is `r grassSum$estimate[2]`. The standard error is `r grassSum$std.error[2]`
+
+C. The fraction explained by the number of nutrients added is `r summary(grasslandReg)$r.squared*100`%. 
+
+D. Test the null hypothesis for no treatment effect on the number of plant species.
+With a test statistic of `r grassSum$statistic[2]` and a p-value of `r grassSum$p.value[2]`, the p-value is less than the 5% significance and we can reject the null hypothesis. 
+
+
+```{r C17_Q30}
+#Load Data
+teeth <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q30NuclearTeeth.csv"))
+
+#A. What is the approximate slope of the regression line?
+teethReg <- lm(dateOfBirth~deltaC14, data = teeth)
+summary(teethReg)
+teethSum <- tidy(teethReg)
+
+# Visualize Data 
+teeth_fit_plot <- ggplot(data=teeth) +
+  aes(x=deltaC14, y=dateOfBirth) +
+  geom_point() +
+  stat_smooth(method="lm")
+
+teeth_fit_plot
+
+#B. Which pair of lines shows the confidence bands? What do these confidence bands tell us?
+predFrame <- data.frame(deltaC14 = min(teeth$deltaC14):max(teeth$deltaC14))
+predVals <- predict(teethReg, newdata=predFrame, interval="prediction")
+
+predFrame <- cbind(predFrame, predVals) %>%
+  rename(dateOfBirth = fit)
+
+head(predFrame)
+
+teeth_fit_plot +
+  stat_smooth(method="lm", color="blue") +
+  geom_ribbon(data=predFrame, mapping=aes(x=deltaC14, ymin=lwr, ymax=upr),
+              fill="grey", alpha=0.6) +
+  theme_bw()
+
+
+```
+A. The approximate slope is `r teethSum$estimate[2]`. 
+
+B. Which pair of lines shows the confidence bands? What do these confidence bands tell us? The inner bands shows the confidence bands where we are 95% sure the true mean lies. 
+
+C. C. Which pair of lines shows the prediction interval? What does this prediction interval tell us? The outer bands shows the prediction intervals where we are 95% sure future data points will lie within. 
+
+
+```{r C17_Q31}
+#Load Data
+lastSup <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q31LastSupperPortionSize.csv"))
+
+lastSupReg <- lm(portionSize~year, data = lastSup)
+anova(lastSupReg)
+summary(lastSupReg)
+lastSupSum <- tidy(lastSupReg)
+
+lastSup_fit_plot <- ggplot(data=lastSup) +
+  aes(x=year, y=portionSize) +
+  geom_point() +
+  stat_smooth(method="lm")
+
+lastSup_fit_plot
+
+predFrame <- data.frame(year = min(lastSup$year):max(lastSup$year))
+predVals <- predict(lastSupReg, newdata=predFrame, interval="prediction")
+
+predFrame <- cbind(predFrame, predVals) %>%
+  rename(portionSize = fit)
+
+head(predFrame)
+
+lastSup_fit_plot +
+  stat_smooth(method="lm", color="blue") +
+  geom_ribbon(data=predFrame, mapping=aes(x=year, ymin=lwr, ymax=upr),
+              fill="grey", alpha=0.6) +
+  theme_bw()
+
+# Plot Residuals
+plot(lastSupReg, which=1)
+
+# Plot Histogram of Residuals
+hist(residuals(lastSupReg))
+
+```
+A. Calculate a regression line that best describes the relationship between year of painting and the portion size. What is the trend? How rapidly has portion size changed in paintings? Positive trend. The portion size per year has changed `r lastSupSum$estimate[2]`. 
+
+B. What is the plausibe range of value for the slope of this relationship? Calculate a 95% confidence interval. 
+`r confint(lastSupReg)`.
+
+C. Test for a change in relative portion size painted in these works of art with the year in which they were painted. 
+We have a p value `r lastSupSum$p.value` greater than our 5% signficance level threshold; thus, we cannot reject our null hypothesis. 
+
+D. Draw a residual plot of these data and examine it carefully. Can you see any cause for concern about using a linear regression? Suggest an approach that could be tried to address the problem. The data spread appears to be cubic spline fit. 
+
+
+## 4. Intervals and simulation
+
+Fit the deet and bites model from lab.
+
+```{r}
+deet <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q29DEETMosquiteBites.csv"))
+
+ggplot(deet, aes(dose, bites)) +
+  geom_point() +
+  stat_smooth(method=lm)
+
+```
+
+Now, look at `vcov()` applied to your fit. For example:
+
+```{r, echo = TRUE}
+deet_mod <- lm(bites ~ dose, data = deet)
+
+vcov(deet_mod)
+```
+
+What you have here is the variance-covariance matrix of the parameters of the model. In essence, every time you larger slopes in this case will have smaller intercepts, and vice-verse. This maintains the best fit possible, despite deviations in the slope and intercept.  BUT - what's cool about this is that it also allows us to produce simulations (posterior simulations for anyone interested) of the fit. We can use a package like `mnormt` that let's us draw from a multivariate normal distribution when provided with a vcov matrix.  For example...
+
+
+```{r mnorm, echo=TRUE}
+library(mnormt)
+
+rmnorm(4, mean = coef(deet_mod), varcov = vcov(deet_mod))
+```
+
+produces a number of draws of the variance and the covariance!
+
+### 4a. Fit simulations!
+Using `geom_abline()` make a plot that has the following layers and shows that these simulated lines match up well with the fit CI. 1) the data, 2) the lm fit with a CI, and 3) simulated lines. You might have to much around to make it look as good as possible.
+
+
+```{r, eval=FALSE}
+coef_sims <- rmnorm(500, mean = coef(deet_mod), varcov = vcov(deet_mod)) %>%
+  as.data.frame
+
+ggplot(deet, aes(dose, bites)) +
+  geom_point() +
+  geom_abline(data = coef_sims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
+  stat_smooth(data = deet, method=lm, fill = "red")
+```
+
+### 4b. Prediction simulations!
+
+That's all well and good, but what about the prediction intervals? To each line, we can add some error drawn from the residual standard deviation. That residual can either be extracted from `summary()` or you can get the `sd` of `residuals`.
+
+Now, visualize the simulated prediction interval around the fit versus the calculated prediction interval around the fit via `predict`. **+1 extra credit for a clever visualization of all elements on one figure - however you would like**
+
+```{r, warning = FALSE, eval=FALSE}
+coef_sims <- coef_sims %>%
+  mutate(error = rnorm(n(), 0, sd(deet_mod$residuals)))
+
+pred_frame <- predict(deet_mod, interval="prediction") %>% cbind(deet)
+
+ggplot(deet, aes(dose, bites)) +
+  geom_point() +
+  geom_abline(data = coef_sims, aes(slope = dose, intercept = error+`(Intercept)`), alpha = 0.5, color = "orange") +
+  geom_ribbon(data = pred_frame, aes(ymin = lwr, ymax = upr), fill = "purple", alpha = 0.5) +
+  geom_abline(data = coef_sims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
+  stat_smooth(data = deet, method=lm, fill = "red")
+
+```
