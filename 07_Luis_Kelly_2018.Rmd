@@ -5,7 +5,15 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, eval=FALSE)
+knitr::opts_chunk$set(echo = FALSE)
+library(bbmle)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(beyonce)
+library(profileModel)
+
 ```
 
 ## Puffers!
@@ -14,67 +22,62 @@ Let's look at the [pufferfish data](http://biol607.github.io/homework_2018/data/
 
 **1. Grid Sampling!** Based on Friday's lab, load up the pufferfish data and use grid sampling to find the MLE of the slope, intercept and residual SD of this model. Feel free to eyeball results from an `lm()` fit to get reasonable values. Try not to do this for a grid of more than ~100K points (more if you want!). It's ok to be coarse. Compare to lm.
 
-```{r}
-library(tidyr)
-library(dplyr)
+```{r, echo = TRUE}
+# Read Puffer Data
+puffer <- read.csv("/Users/Kelly/Desktop/Classes/Fall2018/Biol607/biol607.github.io/homework_2018/data/16q11PufferfishMimicry Caley & Schluter 2003.csv")
 
-puffer <- read.csv("./data/16q11PufferfishMimicry Caley & Schluter 2003.csv")
+#Regression for Parameter Values
+pufferReg <- lm(predators ~ resemblance, data = puffer)
+summary(pufferReg)
 
-#for parameter values
-puffer_lm <- lm(predators ~ resemblance, data = puffer)
-summary(puffer_lm)
-
-lik_fun <- function(slope, intercept, resid_sd){
-  #data generating process
+# Likelihood Function
+likFun <- function(slope, intercept, resid_sd){
   predators_fit <- intercept + slope * puffer$resemblance
   
-  #likelihood
+  #Likelihood
   sum(dnorm(puffer$predators, predators_fit, resid_sd, log=TRUE))
-  
   
 }
 
+# Combinations for Likelihood Function
 grid_samp <- crossing(intercept = seq(0.5, 2.5, .05),
                       slope = seq(2,4,.05),
                       resid_sd = seq(2.9, 3.1, .01)) %>%
   rowwise() %>%
-  mutate(logLik = lik_fun(slope, intercept, resid_sd)) %>%
+  mutate(logLik = likFun(slope, intercept, resid_sd)) %>%
   ungroup()
 
-#the ML estimates are
+#ML Estimates
 grid_samp %>% filter(logLik == max(logLik))
-puffer_lm
+pufferReg
 ```
 
 **2. Surfaces!** Filter the dataset to the MLE of the SD. Plot the surface for the slope and intercept in whatever way you find most compelling. You might want to play around with zooming in to different regions, etc. Have fun!
 
-```{r ggplot}
-library(ggplot2)
-library(viridis)
+```{r ggplot, echo = TRUE}
 
 ggplot(grid_samp %>% filter(resid_sd == 2.9)
        %>%   filter(logLik >  max(logLik) - 4),
        aes(x = intercept, y = slope, fill = exp(logLik))) +
   geom_raster() +
-  scale_fill_viridis()
+  scale_fill_gradient2(low = beyonce_palette(22)[1], mid = beyonce_palette(22)[3], high = beyonce_palette(22)[6], midpoint = median(exp(grid_samp$logLik)))
 
 ```
 
 **3. GLM!** Now, compare those results to results from glm. Show the profiles and confidence intervals from `glm()` for the slope and intercept.
 
-```{r puffer_glm}
-puffer_glm <- glm(predators ~ resemblance, data = puffer,
+```{r puffer_glm, echo = TRUE}
+pufferGlm <- glm(predators ~ resemblance, data = puffer,
                  family = gaussian(link = "identity"))
 
-library(profileModel)
-
-prof <- profileModel(puffer_glm,
+prof <- profileModel(pufferGlm,
                      objective = "ordinaryDeviance",
                      quantile = qchisq(0.95, 1))
-
+# Visualize Plot 
 plot(prof)
 
-confint(puffer_glm)
+# 95% Confidence Interval
+confint(pufferGlm)
 
 ```
 
@@ -83,49 +86,47 @@ confint(puffer_glm)
   
 Load up `'bbmle` and try out `mle2`. It's a bit different, in that the first argument is a function that *minimizes* the log likelihood (not maximizes). The second argument is a list of start values - e.g. `list(slope = 2, intercept = 5, resid_sd = 2)`. Try and fit your model with `mle2` using start values close to the actual estimates. Look at the summary and plot the profile. Note, you might get a lot of errors because it will try impossible values of your residual SD. Also, note thatyou'll have to rewrite your likelihood function to return the negative log likelihood (or write a wrapper that does so). A small thing
 
-```{r mle2}
-library(bbmle)
+```{r mle2, echo = TRUE}
+minLikFun <- function(slope, intercept, resid_sd) -1*likFun(slope, intercept, resid_sd)
 
-min_lik_fun <- function(slope, intercept, resid_sd) -1*lik_fun(slope, intercept, resid_sd)
-
-puffer_mle2 <- mle2(min_lik_fun, 
+pufferMle2 <- mle2(minLikFun, 
                     start = list(slope = 1.9, intercept = 1, resid_sd = 3))
 
-summary(puffer_mle2)
-plot(profile(puffer_mle2))
+summary(pufferMle2)
+plot(profile(pufferMle2))
 
 ```
 
 **5. Start values!** What happens if you start with start values *very* far away from the initial values. Failing here is fine. But what do you think is happening, and what does this say about the value of start values?
 
-```{r mle2_fail}
- mle2(min_lik_fun, 
+```{r mle2_fail, echo = TRUE}
+
+#Expecting mle2 error
+ mle2(minLikFun, 
                     start = list(slope = 100, intercept = -100, resid_sd = 0.1))
 
-#This produces a convergence error - the algorithm never converges.
-#other possibilities are that the whole thing fails because of bad sd values 
-#or we get convergence and they don't notice anything
-#Start values are very important and can alter the outcome of your models. Try either "good" start values, or try multiple ones and make sure your results conferge.
 ```
+It is not converging because we probably have poor sd values. We have bad start values and need to play around with the start values to determine start values that don't result in a convergence error. 
 
 **6. Algorithms!** By default, `mle2` uses the Nelder-Mead algorithm via the `optim` function. What happens if you add an `method` argument to "SANN" or "L-BFGS-B" (and for the later, which is bounded sampling, give it a `lower` argument for your residual value, so it's always positive). See `?optim` for some more guidance. Do these both converge to the same value? Based on their profiles, do you trust them? (Note, Simulated annealing takes a looooong time. Go have a cuppa while the profile for that one runs).
  
-```{r}
-
-puffer_sann <- mle2(min_lik_fun, 
+```{r, echo= TRUE}
+# Neler-Mead Algorithm:SANN Method
+pufferSann <- mle2(minLikFun, 
                     start = list(slope = 1.9, intercept = 1, resid_sd = 3),
                     method = "SANN")
+# View mle2 Results
+summary(pufferSann)
+plot(profile(pufferSann))
 
-summary(puffer_sann)
-plot(profile(puffer_sann))
-
-puffer_bfgs <- mle2(min_lik_fun, 
+# Neler-Mead Algorithm: L-BFGS-B
+pufferBfgs <- mle2(minLikFun, 
                     start = list(slope = 1.9, intercept = 1, resid_sd = 3),
           method = "L-BFGS-B",
           lower=c(resid_sd = 1e-10))
 
-plot(profile(puffer_bfgs))
-
-summary(puffer_bfgs)
+# View mle2 Results
+plot(profile(pufferBfgs))
+summary(pufferBfgs)
 
 ```

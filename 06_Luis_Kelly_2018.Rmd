@@ -17,7 +17,7 @@ Note: Datasets are available at http://whitlockschluter.zoology.ubc.ca/data so y
 ## 1. Correlation - W&S Chapter 16
 
 ###Questions 15
-```{r C16_Q15}
+```{r C16_Q15, echo = TRUE}
 # Download Data
 gray <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter16/chap16q15LanguageGreyMatter.csv"))
 
@@ -45,7 +45,7 @@ The scatter plot indicates a bivariate normal distribution where the relationshi
 
 
 ###Questions 19
-```{r C16_Q19}
+```{r C16_Q19, echo = TRUE}
 #Load Data
 rat <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter16/chap16q19LiverPreparation.csv"))
 
@@ -69,7 +69,7 @@ D. What steps would you take with these data to meet the assumptions of correlat
 
 Consider the following dataset:
 
-```{r make_data}
+```{r make_data, echo = TRUE}
 set.seed(20181011)
 library(mnormt)
 
@@ -85,14 +85,14 @@ knitr::kable(mat, "html") %>% kableExtra::kable_styling("striped")
 ### 2a.
 Are these two variables correlated? What is the output of `cor()` here. What does a test show you?
 
-```{r, eval=FALSE}
+```{r, echo = TRUE}
 matCor <- cor.test(mat$cats, mat$happiness_score)
 ```
 
 
 ### 2b.
 What is the SE of the correlation based on the info from `cor.test()`
-```{r, eval=FALSE}
+```{r, echo = TRUE}
 provided <- (0.7877084 - 0.3136313 )/2
 provided
 se_man <- sqrt((1-(matCor$estimate^2))/(length(mat$cats-2)))
@@ -102,7 +102,7 @@ se_man
 ### 2c.
 Now, what is the SE via simulation? To do this, you'll need to use `cor()` and get the relevant parameter from the output (remember - you get a matrix back, so, what's the right index!), `replicate()`, and `sample()` or `dplyr::sample_n()` with `replace=TRUE` to get, let's say, 1000 correlations. How does this compare to your value above?
 
-```{r}
+```{r, echo = TRUE}
 ses <- replicate(1000, cor(sample_n(mat, nrow(mat), replace=TRUE))[1,2])
 
 sd(ses)
@@ -115,7 +115,7 @@ sd(ses)
 ## 3. W&S Chapter 17
 
 ###Questions 19, 30, 31
-```{r C17_Q19}
+```{r C17_Q19, echo = TRUE}
 #Load Data
 grassland <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q19GrasslandNutrientsPlantSpecies.csv"))
 
@@ -150,22 +150,23 @@ A. Species is the response variables because we are determining if the number of
 
 B. Rate of change is `r grassSum$estimate[2]`. The standard error is `r grassSum$std.error[2]`
 
-C. The fraction explained by the number of nutrients added is `r summary(grasslandReg)$r.squared*100`%. 
+C. The fraction explained by the number of nutrients added is `r summary(grasslandReg)$r.squared`. 
 
 D. Test the null hypothesis for no treatment effect on the number of plant species.
+
 With a test statistic of `r grassSum$statistic[2]` and a p-value of `r grassSum$p.value[2]`, the p-value is less than the 5% significance and we can reject the null hypothesis. 
 
 
-```{r C17_Q30}
+```{r C17_Q30, echo = TRUE}
 #Load Data
 teeth <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q30NuclearTeeth.csv"))
 
-#A. What is the approximate slope of the regression line?
+# Calculate Regression Line
 teethReg <- lm(dateOfBirth~deltaC14, data = teeth)
 summary(teethReg)
 teethSum <- tidy(teethReg)
 
-# Visualize Data 
+# Plot Data and Linear Regression
 teeth_fit_plot <- ggplot(data=teeth) +
   aes(x=deltaC14, y=dateOfBirth) +
   geom_point() +
@@ -173,15 +174,13 @@ teeth_fit_plot <- ggplot(data=teeth) +
 
 teeth_fit_plot
 
-#B. Which pair of lines shows the confidence bands? What do these confidence bands tell us?
+#Calculate Confidence Intervals and Prediction Intervals
 predFrame <- data.frame(deltaC14 = min(teeth$deltaC14):max(teeth$deltaC14))
 predVals <- predict(teethReg, newdata=predFrame, interval="prediction")
-
 predFrame <- cbind(predFrame, predVals) %>%
   rename(dateOfBirth = fit)
 
-head(predFrame)
-
+# Plot Prediction Intervals
 teeth_fit_plot +
   stat_smooth(method="lm", color="blue") +
   geom_ribbon(data=predFrame, mapping=aes(x=deltaC14, ymin=lwr, ymax=upr),
@@ -190,22 +189,28 @@ teeth_fit_plot +
 
 
 ```
-A. The approximate slope is `r teethSum$estimate[2]`. 
+A. We have a negative relationship with an approximate slope is `r teethSum$estimate[2]`. 
 
-B. Which pair of lines shows the confidence bands? What do these confidence bands tell us? The inner bands shows the confidence bands where we are 95% sure the true mean lies. 
+B. Which pair of lines shows the confidence bands? What do these confidence bands tell us? 
+The inner bands shows the confidence bands and the confidence bands measures the precision of the predicted year mean for a given deltaC14. 
 
-C. C. Which pair of lines shows the prediction interval? What does this prediction interval tell us? The outer bands shows the prediction intervals where we are 95% sure future data points will lie within. 
+C. Which pair of lines shows the prediction interval? What does this prediction interval tell us? The outer bands shows the prediction intervals and the prediction interval measures the precision of a predicted single year for a given deltaC14. Thus, the interval brackets most of the data points because it includes the varibility in years from individual year to individual year at a given deltaC14. 
 
 
-```{r C17_Q31}
+```{r C17_Q31, echo = TRUE}
 #Load Data
 lastSup <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q31LastSupperPortionSize.csv"))
 
+#Computer Linear Regression
 lastSupReg <- lm(portionSize~year, data = lastSup)
-anova(lastSupReg)
+
+#ANOVA test of zero regression slope 
+testZero <- anova(lastSupReg)
+Fvalue <- testZero$`F value`[1]
 summary(lastSupReg)
 lastSupSum <- tidy(lastSupReg)
 
+# Plot Linear Regression
 lastSup_fit_plot <- ggplot(data=lastSup) +
   aes(x=year, y=portionSize) +
   geom_point() +
@@ -213,6 +218,7 @@ lastSup_fit_plot <- ggplot(data=lastSup) +
 
 lastSup_fit_plot
 
+# Predict Linear Regression
 predFrame <- data.frame(year = min(lastSup$year):max(lastSup$year))
 predVals <- predict(lastSupReg, newdata=predFrame, interval="prediction")
 
@@ -221,6 +227,7 @@ predFrame <- cbind(predFrame, predVals) %>%
 
 head(predFrame)
 
+# Plot Prediction with Ribbon
 lastSup_fit_plot +
   stat_smooth(method="lm", color="blue") +
   geom_ribbon(data=predFrame, mapping=aes(x=year, ymin=lwr, ymax=upr),
@@ -234,45 +241,56 @@ plot(lastSupReg, which=1)
 hist(residuals(lastSupReg))
 
 ```
-A. Calculate a regression line that best describes the relationship between year of painting and the portion size. What is the trend? How rapidly has portion size changed in paintings? Positive trend. The portion size per year has changed `r lastSupSum$estimate[2]`. 
+A. Calculate a regression line that best describes the relationship between year of painting and the portion size. What is the trend? How rapidly has portion size changed in paintings? 
+Positive trend. The portion size per year has changed `r lastSupSum$estimate[2]`. 
 
 B. What is the plausibe range of value for the slope of this relationship? Calculate a 95% confidence interval. 
-`r confint(lastSupReg)`.
+`r confint(lastSupReg)[2,]`.
 
 C. Test for a change in relative portion size painted in these works of art with the year in which they were painted. 
-We have a p value `r lastSupSum$p.value` greater than our 5% signficance level threshold; thus, we cannot reject our null hypothesis. 
+Null Hypothesis: No change in relative portion size painted in these works of art with the year in which they were painted. 
 
-D. Draw a residual plot of these data and examine it carefully. Can you see any cause for concern about using a linear regression? Suggest an approach that could be tried to address the problem. The data spread appears to be cubic spline fit. 
+With a test statistic of `r lastSupSum$statistic` and a p value `r lastSupSum$p.value`, we can say that there was a change in relative portion size with the year they were painted in. In addition, the ANOVA table shows us that the F value is `r Fvalue` and if the null hypothesis is true, it would be zero. 
+
+D. Draw a residual plot of these data and examine it carefully. Can you see any cause for concern about using a linear regression? Suggest an approach that could be tried to address the problem. 
+The residual plot does not normality and equal variance assumptions because there is a noticeable dip along the x-axis, unequal variance above and below the line at all values of x, and there appear to be higher density points away from the line. You can transfrom the data or apply a nonlinear regression technique like smoothing. I think a spline fit would do well in this occassion. 
 
 
 ## 4. Intervals and simulation
 
 Fit the deet and bites model from lab.
 
-```{r}
+```{r, echo = TRUE}
 deet <- read.csv(url("http://www.zoology.ubc.ca/~schluter/WhitlockSchluter/wp-content/data/chapter17/chap17q29DEETMosquiteBites.csv"))
 
-ggplot(deet, aes(dose, bites)) +
+# Plot Data
+ggplot(data = deet, aes(x = dose, y = bites)) +
   geom_point() +
-  stat_smooth(method=lm)
+  stat_smooth(method = lm) +
+  xlab("Dose") +
+  ylab("Bites")
 
 ```
 
 Now, look at `vcov()` applied to your fit. For example:
 
 ```{r, echo = TRUE}
-deet_mod <- lm(bites ~ dose, data = deet)
+# Linear Regression for Bites to Deet Dosage
+deetReg <- lm(bites ~ dose, data = deet)
 
-vcov(deet_mod)
+# Variance 
+vcov(deetReg)
 ```
 
 What you have here is the variance-covariance matrix of the parameters of the model. In essence, every time you larger slopes in this case will have smaller intercepts, and vice-verse. This maintains the best fit possible, despite deviations in the slope and intercept.  BUT - what's cool about this is that it also allows us to produce simulations (posterior simulations for anyone interested) of the fit. We can use a package like `mnormt` that let's us draw from a multivariate normal distribution when provided with a vcov matrix.  For example...
 
 
 ```{r mnorm, echo=TRUE}
+# Load mnormt package
 library(mnormt)
 
-rmnorm(4, mean = coef(deet_mod), varcov = vcov(deet_mod))
+# Draw a multivariate normal distribution
+rmnorm(4, mean = coef(deetReg), varcov = vcov(deetReg))
 ```
 
 produces a number of draws of the variance and the covariance!
@@ -281,14 +299,14 @@ produces a number of draws of the variance and the covariance!
 Using `geom_abline()` make a plot that has the following layers and shows that these simulated lines match up well with the fit CI. 1) the data, 2) the lm fit with a CI, and 3) simulated lines. You might have to much around to make it look as good as possible.
 
 
-```{r, eval=FALSE}
-coef_sims <- rmnorm(500, mean = coef(deet_mod), varcov = vcov(deet_mod)) %>%
+```{r, echo = TRUE}
+coefSims <- rmnorm(500, mean = coef(deetReg), varcov = vcov(deetReg)) %>%
   as.data.frame
 
 ggplot(deet, aes(dose, bites)) +
   geom_point() +
-  geom_abline(data = coef_sims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
-  stat_smooth(data = deet, method=lm, fill = "red")
+  geom_abline(data = coefSims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
+  stat_smooth(data = deet, method=lm, fill = "blue")
 ```
 
 ### 4b. Prediction simulations!
@@ -297,17 +315,17 @@ That's all well and good, but what about the prediction intervals? To each line,
 
 Now, visualize the simulated prediction interval around the fit versus the calculated prediction interval around the fit via `predict`. **+1 extra credit for a clever visualization of all elements on one figure - however you would like**
 
-```{r, warning = FALSE, eval=FALSE}
-coef_sims <- coef_sims %>%
-  mutate(error = rnorm(n(), 0, sd(deet_mod$residuals)))
+```{r, echo = TRUE}
+coefSims <- coefSims %>%
+  mutate(error = rnorm(n(), 0, sd(deetReg$residuals)))
 
-pred_frame <- predict(deet_mod, interval="prediction") %>% cbind(deet)
+pred_frame <- predict(deetReg, interval="prediction") %>% cbind(deet)
 
 ggplot(deet, aes(dose, bites)) +
   geom_point() +
-  geom_abline(data = coef_sims, aes(slope = dose, intercept = error+`(Intercept)`), alpha = 0.5, color = "orange") +
+  geom_abline(data = coefSims, aes(slope = dose, intercept = error+`(Intercept)`), alpha = 0.5, color = "orange") +
   geom_ribbon(data = pred_frame, aes(ymin = lwr, ymax = upr), fill = "purple", alpha = 0.5) +
-  geom_abline(data = coef_sims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
-  stat_smooth(data = deet, method=lm, fill = "red")
+  geom_abline(data = coefSims, aes(slope = dose, intercept = `(Intercept)`), alpha = 0.5) +
+  stat_smooth(data = deet, method=lm, fill = "blue")
 
 ```
