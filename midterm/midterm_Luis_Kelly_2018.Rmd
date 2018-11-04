@@ -1,0 +1,345 @@
+---
+title: "Midterm Exam"
+author: Kelly Luis
+output: html_notebook
+---
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '~/Desktop/Classes/Fall2018/Biol607/hw/data/', echo = FALSE)
+
+# Load Libraries
+library(tidyverse)
+library(ggplot2)
+library(broom)
+library(modelr)
+library(dplyr)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(beyonce)
+```
+
+# 1) Sampling your system
+Each of you has a study system your work in and a question of interest. Give an example of one variable that you would sample in order to get a sense of its variation in nature. Describe, in detail, how you would sample for the population of that variable in order to understand its distribution. Questions to consider include, but are not limited to: Just what is your sample versus your population? What would your sampling design be? Why would you design it that particular way? What are potential confounding influences of both sampling technique and sample design that you need to be careful to avoid? What statistical distribution might the variable take, and why?
+
+__Variable: Remote Sensing Reflectance__
+Remote sensing reflectance (1/m) is the spectral distribution of visible light from below the ocean surface. 
+
+Just what is your sample versus your population? 
+A "sample" of of remote sensing reflectance would be a measurement from a given time point and a "population" would be measurements from all time points and from every location possible. 
+
+What would your sampling design be? Our group primarily measures remote sensing reflectance with a hyperspectral floating spectrometer from the side of a boat. The floating spectrometer takes measurements of the downwelling and upwelling light fleld in the visible range and the ratio between the two is the remote sensing reflectance. Measurements every few nanometers every few seconds. We deploy our instrument over diverse shallow benthic habitats to determine the remote sensing reflectances characteristics of varying benthic habitat. 
+
+Why would you design it that particular way?
+Our approach is designed this way because very few light field measurements are taken over diverse shallow water environments. Creating a library of varying benthic types, depths, water properties, and sky conditions informs ocean color algorithm models used fror calibrating and validating airborne and shipborne ocean color sensors. Thus, our sampling design involves looking at benthic habitat maps, talking with local scientists about where we can find varying types, and then working with boat captains to see if we are able to take measurements in those areas. 
+
+What are potential confounding influences of both sampling technique and sample design that you need to be careful to avoid? 
+Taking measurements during foul weather or non-clear sky days will introduce variability into our measurements of the in-water and above water light field. In addition, in averaging over nanometer and seconds intervals will also introduce uncertainty. 
+
+What statistical distribution might the variable take, and why?
+If I'm looking at measurements of remote sensing reflectance over a single bottom type (let's use white sand as an example), 
+my variable might have a normal distribution. If I was to take measurements over white sand at different locations and at different time points, the reflectance would center around the mean and I believe the a bulk of the observations would fall within a standard deviation of the mean. I think if it varied significantly folks in my field would classify the bottom as a different type of benthic habitat (i.e. black sand, mixture, etc.). Thinking about this problem makes me want to look at the distribution of sand remote sensing reflectances. 
+
+# 2) Let's get philosophical
+Are you a frequentist, likelihoodist, or Bayesian? Why? Include in your answer why you prefer the inferential tools (e.g. confidence intervals, test statistics, posterior probabilities, etc.) of your chosen worldview and why you do not like the ones of the other one. This includes defining just what those different tools mean!
+__Kelly's Worldview: Frequentist__
+
+My scientific worldview is tainted by the question: "How well does an airborne or satellite sensor match a shipborne measurement?" Thus, my field operates under a frequentist mindset where a true value, specifically the shipborne measurement, exists and inferential tools like confidence intervals are widely used to determine how "well" an observation (i.e. airborne or spaceborne) captured the true value. Likelihood and bayesian methods are rarely used because the posterior probability does no
+
+# 3) Power
+We have a lot of aspects of the sample of data that we collect which can alter the power of our linear regressions.
+1. Slope
+2. Intercept
+3. __Residual variance__
+4. __Sample Size__
+5. __Range of X values__
+
+Choose three of the above properties and demonstrate how they alter power of an F-test from a linear regression using at least three different alpha levels (more if you want!) As a baseline of the parameters, let’s use the information from the seal data:
+
+slope = 0.00237, intercept=115.767, sigma = 5.6805, range of seal ages = 958 to 8353, or, if you prefer, seal ages ∼ N(3730.246, 1293.485). Your call what distribution to use for seal age simulation.
+
+```{r seal_setup, echo= TRUE, eval=TRUE}
+# Load Data
+seals <- read_csv("17e8ShrinkingSeals Trites 1996.csv")
+
+# Set Parameters
+slopeSeal <- 0.00237
+interceptSeal <- 115.767
+sigmaSeal <- 5.6805
+minSeal <- 958
+maxSeal <- 8353
+sizeSeal <- nrow(seals)
+```
+
+
+```{r pval_ftest, echo = TRUE, eval = TRUE}
+
+pval_ftest <- function(samp_size = sizeSeal, slope = slopeSeal, intercept = interceptSeal, sigma = sigmaSeal, min = minSeal, max = maxSeal){
+ 
+  # Generate Normal Distribution for Seal Age (Days)
+  age.days <- runif(samp_size, min, max)
+  
+  # Generate Data Frame for Seal Age and Seal Length (cm)
+  seal_df <- data.frame(intercept = intercept, sigma = sigma, age.days = age.days, 
+                        length.cm = rnorm(samp_size, intercept + slope * age.days, sigma))
+  
+  # Compute Linear Regression
+  seal_reg <- lm(length.cm~age.days, seal_df)
+
+  # Compute ANOVA 
+  seal_anova <- anova(seal_reg)
+  
+  # Extract F-Test P-Value
+  seal_pval <- seal_anova$`Pr(>F)`[1]
+  
+  return(seal_pval)
+}
+
+```
+
+```{r pow_ftest, echo = TRUE, eval = TRUE}
+pow_ftest <- function(nsims = 100, alpha =0.05, samp_size = sizeSeal, slope = slopeSeal, intercept = interceptSeal, sigma = sigmaSeal, min = minSeal, max = maxSeal){
+  
+  # Apply seal_pval nsims times
+  p <- replicate(nsims, pval_ftest(samp_size, slope, intercept, sigma, min, max))
+  
+  # Calculate the number of p values that are incorrect given that we should be rejecting the null
+  num_wrong <- sum(p > alpha)
+  
+  # Return power
+  power <- 1 - num_wrong/nsims
+  
+  return(power)
+}
+```
+
+```{r apply_pow_ftest, echo = TRUE, eval = TRUE}
+pow_df <- crossing(alpha_diff = c(0.005,0.05,0.5),
+                   size_diff = 90:100, 
+                   slope_diff = seq(0.001,0.006, 0.002), 
+                   intercept_diff = 110:120, 
+                   sigma_diff = 1:10) %>%
+  rowwise() %>%
+  mutate(power = pow_ftest(10, 
+                           alpha = alpha_diff, 
+                           samp_size = size_diff, 
+                           slope = slope_diff, 
+                           intercept = intercept_diff, 
+                           sigma = sigma_diff)) %>%
+  ungroup()
+```
+
+
+```{r plot_sizediff, echo = TRUE, eval = TRUE}
+size_plot <-  ggplot(pow_df, aes(x=size_diff, y = power, color = factor(alpha_diff))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~sigma_diff) +
+  scale_color_manual(values = beyonce_palette(79)) 
+
+size_plot
+```
+
+```{r plot_interceptdiff, echo = TRUE, eval = TRUE}
+intercept_plot <- ggplot(pow_df, aes(x=intercept_diff, y = power, color = factor(alpha_diff))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~sigma_diff) +
+  scale_color_manual(values = beyonce_palette(79)) 
+
+intercept_plot
+
+```
+
+
+```{r plot_slopediff, echo = TRUE, eval = TRUE}
+slope_plot  <- ggplot(pow_df, aes(x=slope_diff, y = power, color = factor(alpha_diff))) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~sigma_diff) +
+  scale_color_manual(values = beyonce_palette(79)) 
+
+slope_plot
+
+```
+
+Extra credit 1 - test whether the distribution of ages alters power: 3 points
+
+Extra Credit 2 Choose just one of the above elements to vary. Using likelihood to fit models, repeat your power analysis for a chi-square likelihood ratio test. You can use glm(), bbmle or some other means of fitting and obtaining a LRT at your discretion. 5 points.
+
+# 4) Bayes Theorem
+I’ve referenced the following figure a few times. I’d like you to demonstrate your understanding of Bayes Theorem by hand showing what the probability of the sun exploding is given the data. Assume that your prior probability that the sun explodes is p(Sun Explodes) = 0.0001. The rest of the information you need is in the cartoon!
+
+```{r bayes_sun, echo = TRUE, eval = TRUE}
+sun_explodes <- 0.0001
+detector_right <- 35/36
+sun_stable <- 1-sun_explodes
+detector_wrong <- 1/36
+yes <- (sun_explodes*detector_right)+(sun_stable*detector_wrong)
+
+detector_sun_explodes <- (sun_explodes*dice_explodes)/(sun_explodes*detector_right)+(sun_stable*detector_wrong)
+
+detector_sun_explodes <- (sun_explodes*dice_explodes)/yes
+```
+
+# 5) Quailing at the Propect of Linear Models
+I’d like us to walk through the three different ‘engines’ that we have learned about to fit linear models. To motivate this, we’ll look at Burness et al.’s 2012 study "Post-hatch heat warms adult beaks: irreversible physiological plasticity in Japanese quail http://rspb.royalsocietypublishing.org/content/280/1767/20131436.short the data for which they have made available at Data Dryad at http://datadryad.org/resource/doi:10.5061/dryad.gs661. We’ll be looking at the morphology data.
+
+## 5.1 Three fits
+To begin with, I’d like you to fit the relationship that describes how Tarsus (leg) length predicts upper beak (Culmen) length. Fit this relationship using least squares, likelihood, and Bayesian techniques. For each fit, demonstrate that the necessary assumptions have been met. Note, functions used to fit with likelihood and Bayes may or may not behave well when fed NAs. So look out for those errors.
+
+```{r data_disp, echo = TRUE, eval = TRUE}
+# Read Data
+quail_raw <- read_csv("Morphology data.csv")
+
+# Clean Column Names
+colnames(quail_raw) <- gsub("[()]", "", gsub(" ", "_", colnames(quail_raw)))
+
+# Delete Row with NAs
+quail <- quail_raw[!is.na(quail_raw$Tarsus_mm * quail_raw$Culmen_mm),]
+
+# Plot Data 
+quail_plot <- ggplot(data = quail, aes(x = Culmen_mm, y = Tarsus_mm)) +
+  geom_point() +
+  stat_smooth(method = lm) +
+  xlab("Culmen (mm)") +
+  ylab("Tarsus (mm)") +
+  theme_bw()
+
+quail_plot
+```
+
+```{r least_fit, echo = TRUE, eval = TRUE}
+# Linear Regression Fit 
+quail_lf <- lm(Tarsus_mm ~ Culmen_mm, data = quail)
+
+# Prediction
+predFrame <- data.frame(Culmen_mm = min(quail$Culmen_mm):max(quail$Culmen_mm))
+predVals <- predict(quail_lf, newdata=predFrame, interval="prediction")
+
+predFrame <- cbind(predFrame, predVals) %>%
+  rename(Tarsus_mm = fit)
+
+head(predFrame)
+
+# Plot Prediction with Ribbon
+quail_plot +
+  stat_smooth(method="lm", color="blue") +
+  geom_ribbon(data=predFrame, mapping=aes(x=Culmen_mm, ymin=lwr, ymax=upr),
+              fill="grey", alpha=0.6) +
+  theme_bw()
+
+```
+
+
+```{r likelihood_fit, echo = TRUE, eval = TRUE}
+quail_mle <- glm(Tarsus_mm~Culmen_mm,
+                family = gaussian(link = "identity"),
+                data = quail)
+
+# Assumptions
+quail_fitted <- predict(quail_mle)
+quail_res <- residuals(quail_mle)
+qplot(quail_fitted, quail_res)
+qqnorm(quail_res)
+qqline(quail_res)
+hist(quail_res)  
+
+plot(profile(quail_mle))
+
+quail_plot2 <- ggplot(data = quail, aes(x = Culmen_mm, y = Tarsus_mm)) +
+  geom_point() +
+  stat_smooth(method = "glm", method.args = list(family = gaussian(link="identity")))+
+  xlab("Culmen (mm)") +
+  ylab("Tarsus (mm)") +
+  theme_bw()
+
+quail_plot2
+```
+
+
+```{r bayes_fit, echo = TRUE, eval = TRUE}
+options(mc.cores = parallel::detectCores())
+
+set.seed(607)
+quail_lm_bayes <- stan_glm(Tarsus_mm~Culmen_mm,
+                         data = quail,
+                         family=gaussian())
+
+#plot(quail_lm_bayes, plotfun="stan_trace")
+#plot(quail_lm_bayes, show_density = TRUE) 
+#plot(quail_lm_bayes, show_density = TRUE, par="`Culmen (mm)`") 
+#plot(quail_lm_bayes, show_density = TRUE, par="(Intercept)") 
+#plot(quail_lm_bayes, show_density = TRUE, par="sigma") 
+
+```
+
+## 5.2 Three interpretations
+OK, now that we have fits, take a look! Do the coefficients and their associated measures of error in their estimation match? How would we interpret the results from these different analyses differently? Or would we? Note, confint works on lm objects as well.
+
+```{r lf_metrics, echo = TRUE, eval = TRUE}
+# Linear Regression coefficients: slope and intercept & Standard Error of Slope
+summary(quail_lf)
+
+# Residual & Regression Mean Squares
+quail_anova <- anova(quail_lf)
+
+# 95% Confidence Interval
+quail_ci <- confint(quail_lf)
+
+```
+
+```{r lh_metrics, echo = TRUE, eval = TRUE}
+broom::tidy(quail_mle)
+broom::tidy(lm(Tarsus_mm~Culmen_mm, data=quail))
+confint(quail_mle)
+
+#LRT test of model
+quail_mod_null <- glm(Tarsus_mm ~ 1, 
+               family = gaussian(link = "identity"),
+               data=quail)
+  
+anova(quail_mod_null, quail_mle, test = "LRT")
+
+#t-tests of parameters
+summary(quail_mle)
+
+```
+
+
+```{r bayes_metrics, echo = TRUE, eval = TRUE}
+
+```
+
+## 5.3 Everyday I'm Profilin'
+For your likelihood fit, are your profiles well behaved? For just the slope, use grid sampling to create a profile. You’ll need to write functions for this, and use the results from your glm() fit to provide the reasonable bounds of what you should be profiling over (3SE should do). Is it well behaved? Plot the profile and give the 80% and 95% CI. Verify your results with profileModel.
+
+
+
+## 5.4 The Power of the Prior
+This data set is pretty big. After excluding NAs in the variables we’re interested in, it’s over 766 lines of data! Now, a lot of data can overhwelm a strong prior. But only to a point. Show first that there is enough data here that a prior for the slope with an estimate of 0.4 and a sd of 0.01 is overwhelmed by the data by demonstrating that it produces similar results to our already fit flat prior. Second, see if a very small sample size (n = 10) would at least include 0.4 in it’s 95% Credible Interval. Last, demonstrate at what sample size that 95% CL first begins to include 0.4 when we have a strong prior. How much data do we really need to overcome our prior belief? Note, it takes a long time to fit these models, so, try a strategy of spacing out the 3-4 sample sizes, and then zoom in on an interesting region.
+
+# 6. Extra Credit 
+Make an election forecast as discussed at https://biol607.github.io/extra.html - but this isn’t just a winner prediction. 1 point for the correct winner. 5 points for correctly predicting the popular vote and being within 10% (3% just for trying!). 5 points for predicting the electoral college and geting no more than 5 states wrong (3 points just for trying). 5 points for predicting the senate races getting no more than 5 states wrong (3 points just for trying). 1 extra point for each vote percentage within your 80% Confidence/Credible Interval. Ditto for the house races.
+
+If you want to do something else crazy with the election data, contact me, and we’ll discuss how many extra points it would be worth (typically 3-5).
+
+Theoretically, you could almost pass this exam just by good forecasts.
+
+
+```{r retired_code}
+#pow_df <- crossing(alpha_diff = c(0.005, 0.05, 0.5), slope_diff = seq(0.001,0.009,0.001), intercept_diff = seq(110,120,1), sigma_diff = seq(1,10,1)) %>%
+#  rowwise() %>%
+#  mutate(power = pow_ftest(100, alpha_diff, slope = slope_diff, intercept = intercept_diff)) %>%
+#  ungroup()
+
+#test_output <- seal_data_fun(slope = seq(from = 0.001, to = 0.009,by = 0.001), 
+#                             intercept = seq(from = 110, to = 120, by = 1), 
+#                             sigma = seq(from = 1, to = 10, by = 1))
+
+#plot(110:120, seal_data_fun(intercept = c(110:120)), pch = 16, ylab = 'P')
+
+#sapply(400:420, function(y) seal_TakeTheP(sapply(rep(y,10), function(x) seal_pval(sigma = x))))
+#sapply(400:420, function(x) seal_TakeTheP(sigma = x))
+
+```
+
