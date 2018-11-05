@@ -43,7 +43,7 @@ my variable might have a normal distribution. If I was to take measurements over
 Are you a frequentist, likelihoodist, or Bayesian? Why? Include in your answer why you prefer the inferential tools (e.g. confidence intervals, test statistics, posterior probabilities, etc.) of your chosen worldview and why you do not like the ones of the other one. This includes defining just what those different tools mean!
 __Kelly's Worldview: Frequentist__
 
-My scientific worldview is tainted by the question: "How well does an airborne or satellite sensor match a shipborne measurement?" Thus, my field operates under a frequentist mindset where a true value, specifically the shipborne measurement, exists and inferential tools like confidence intervals are widely used to determine how "well" an observation (i.e. airborne or spaceborne) captured the true value. Likelihood and bayesian methods are rarely used because the posterior probability does no
+My scientific worldview is tainted by the question: "How well does an airborne or satellite sensor match a shipborne measurement?" Thus, my field operates under a frequentist mindset where a true value, specifically the shipborne measurement, exists and inferential tools like confidence intervals are widely used to determine how "well" an observation (i.e. airborne or spaceborne) captured the true value. Likelihood and bayesian methods are rarely used because
 
 # 3) Power
 We have a lot of aspects of the sample of data that we collect which can alter the power of our linear regressions.
@@ -93,10 +93,10 @@ pval_ftest <- function(samp_size = sizeSeal, slope = slopeSeal, intercept = inte
   
   return(seal_pval)
 }
-
 ```
 
 ```{r pow_ftest, echo = TRUE, eval = TRUE}
+
 pow_ftest <- function(nsims = 100, alpha =0.05, samp_size = sizeSeal, slope = slopeSeal, intercept = interceptSeal, sigma = sigmaSeal, min = minSeal, max = maxSeal){
   
   # Apply seal_pval nsims times
@@ -147,7 +147,6 @@ intercept_plot <- ggplot(pow_df, aes(x=intercept_diff, y = power, color = factor
   scale_color_manual(values = beyonce_palette(79)) 
 
 intercept_plot
-
 ```
 
 
@@ -159,7 +158,6 @@ slope_plot  <- ggplot(pow_df, aes(x=slope_diff, y = power, color = factor(alpha_
   scale_color_manual(values = beyonce_palette(79)) 
 
 slope_plot
-
 ```
 
 Extra credit 1 - test whether the distribution of ages alters power: 3 points
@@ -208,115 +206,137 @@ quail_plot <- ggplot(data = quail, aes(x = Culmen_mm, y = Tarsus_mm)) +
 quail_plot
 ```
 
-```{r least_fit, echo = TRUE, eval = TRUE}
+```{r ls_fit, echo = TRUE, eval = TRUE}
 # Linear Regression Fit 
-quail_lf <- lm(Tarsus_mm ~ Culmen_mm, data = quail)
+ls_fit <- lm(Tarsus_mm ~ Culmen_mm, data = quail)
 
 # Prediction
 predFrame <- data.frame(Culmen_mm = min(quail$Culmen_mm):max(quail$Culmen_mm))
-predVals <- predict(quail_lf, newdata=predFrame, interval="prediction")
-
+predVals <- predict(ls_fit, newdata=predFrame, interval="prediction")
 predFrame <- cbind(predFrame, predVals) %>%
   rename(Tarsus_mm = fit)
 
-head(predFrame)
-
-# Plot Prediction with Ribbon
-quail_plot +
+# Plot Predicted Values from Least Squares Fit
+ls_plot <- quail_plot +
   stat_smooth(method="lm", color="blue") +
   geom_ribbon(data=predFrame, mapping=aes(x=Culmen_mm, ymin=lwr, ymax=upr),
               fill="grey", alpha=0.6) +
   theme_bw()
 
+ls_plot
 ```
 
 
-```{r likelihood_fit, echo = TRUE, eval = TRUE}
-quail_mle <- glm(Tarsus_mm~Culmen_mm,
+```{r lh_fit, echo = TRUE, eval = TRUE}
+lh_fit <- glm(Tarsus_mm~Culmen_mm,
                 family = gaussian(link = "identity"),
                 data = quail)
 
-# Assumptions
-quail_fitted <- predict(quail_mle)
-quail_res <- residuals(quail_mle)
-qplot(quail_fitted, quail_res)
-qqnorm(quail_res)
-qqline(quail_res)
-hist(quail_res)  
-
-plot(profile(quail_mle))
-
-quail_plot2 <- ggplot(data = quail, aes(x = Culmen_mm, y = Tarsus_mm)) +
+lh_plot <- ggplot(data = quail, aes(x = Culmen_mm, y = Tarsus_mm)) +
   geom_point() +
   stat_smooth(method = "glm", method.args = list(family = gaussian(link="identity")))+
   xlab("Culmen (mm)") +
   ylab("Tarsus (mm)") +
   theme_bw()
 
-quail_plot2
+lh_plot
 ```
 
 
 ```{r bayes_fit, echo = TRUE, eval = TRUE}
+# Bayes Setup
 options(mc.cores = parallel::detectCores())
-
 set.seed(607)
-quail_lm_bayes <- stan_glm(Tarsus_mm~Culmen_mm,
-                         data = quail,
-                         family=gaussian())
 
-#plot(quail_lm_bayes, plotfun="stan_trace")
-#plot(quail_lm_bayes, show_density = TRUE) 
-#plot(quail_lm_bayes, show_density = TRUE, par="`Culmen (mm)`") 
-#plot(quail_lm_bayes, show_density = TRUE, par="(Intercept)") 
-#plot(quail_lm_bayes, show_density = TRUE, par="sigma") 
+# Bayes Fit with brm
+bayes_fit <- brm(Tarsus_mm~Culmen_mm,
+                   data = quail, 
+                   family=gaussian())
 
+# Plot Bayes Fit
+bayes_chain <- as.data.frame(bayes_fit)
+bayes_plot <- quail_plot +
+  geom_abline(intercept=bayes_chains[,1], slope = bayes_chains[,2], alpha=0.1, color="lightgrey") +
+  geom_abline(intercept=fixef(bayes_mod)[1], slope = fixef(bayes_mod)[2], color="red") +
+  geom_point()
+
+bayes_plot
 ```
 
 ## 5.2 Three interpretations
 OK, now that we have fits, take a look! Do the coefficients and their associated measures of error in their estimation match? How would we interpret the results from these different analyses differently? Or would we? Note, confint works on lm objects as well.
 
 ```{r lf_metrics, echo = TRUE, eval = TRUE}
-# Linear Regression coefficients: slope and intercept & Standard Error of Slope
-summary(quail_lf)
-
-# Residual & Regression Mean Squares
-quail_anova <- anova(quail_lf)
-
-# 95% Confidence Interval
-quail_ci <- confint(quail_lf)
+knitr::kable(tidy(ls_fit), digits=3) %>% kableExtra::kable_styling("striped")
+knitr::kable(anova(ls_fit))%>% kableExtra::kable_styling("striped")
+knitr::kable(confint(ls_fit), digits = 3, "html") %>% kableExtra::kable_styling("striped")
 
 ```
 
 ```{r lh_metrics, echo = TRUE, eval = TRUE}
-broom::tidy(quail_mle)
-broom::tidy(lm(Tarsus_mm~Culmen_mm, data=quail))
-confint(quail_mle)
-
-#LRT test of model
-quail_mod_null <- glm(Tarsus_mm ~ 1, 
-               family = gaussian(link = "identity"),
-               data=quail)
-  
-anova(quail_mod_null, quail_mle, test = "LRT")
-
-#t-tests of parameters
-summary(quail_mle)
-
+knitr::kable(tidy(lh_fit), digits=3) %>% kableExtra::kable_styling("striped")
+knitr::kable(anova(lh_fit)) %>% kableExtra::kable_styling("striped")
+knitr::kable(confint(lh_fit), digits = 3, "html") %>% kableExtra::kable_styling("striped")
 ```
 
-
 ```{r bayes_metrics, echo = TRUE, eval = TRUE}
+knitr::kable(tidy(bayes_fit,intervals = TRUE), "html", digits=2) %>%
+  kableExtra::kable_styling("striped")
 
 ```
 
 ## 5.3 Everyday I'm Profilin'
 For your likelihood fit, are your profiles well behaved? For just the slope, use grid sampling to create a profile. You’ll need to write functions for this, and use the results from your glm() fit to provide the reasonable bounds of what you should be profiling over (3SE should do). Is it well behaved? Plot the profile and give the 80% and 95% CI. Verify your results with profileModel.
+```{r profile_likelihood, echo = TRUE, eval = TRUE}
+
+# Likelihood Function
+likFun <- function(slope, intercept, resid_sd){
+  predators_fit <- intercept + slope * quail$Culmen_mm
+  
+  #Likelihood
+  sum(dnorm(quail$Tarsus_mm, predators_fit, resid_sd, log=TRUE))
+  
+}
+
+# Combinations for Likelihood Function
+grid_samp <- crossing(intercept = seq(0.5, 2.5, .05),
+                      slope = seq(2,4,.05),
+                      resid_sd = seq(2.9, 3.1, .01)) %>%
+  rowwise() %>%
+  mutate(logLik = likFun(slope, intercept, resid_sd)) %>%
+  ungroup()
+
+#ML Estimates
+grid_samp %>% filter(logLik == max(logLik))
 
 
+ggplot(grid_samp %>% filter(resid_sd == 2.9)
+       %>%   filter(logLik >  max(logLik) - 4),
+       aes(x = intercept, y = slope, fill = exp(logLik))) +
+  geom_raster() +
+  scale_fill_gradient2(low = beyonce_palette(22)[1], mid = beyonce_palette(22)[3], high = beyonce_palette(22)[6], midpoint = median(exp(grid_samp$logLik)))
+
+```
+
+
+```{r verify_model, echo = TRUE, eval = TRUE}
+
+```
 
 ## 5.4 The Power of the Prior
-This data set is pretty big. After excluding NAs in the variables we’re interested in, it’s over 766 lines of data! Now, a lot of data can overhwelm a strong prior. But only to a point. Show first that there is enough data here that a prior for the slope with an estimate of 0.4 and a sd of 0.01 is overwhelmed by the data by demonstrating that it produces similar results to our already fit flat prior. Second, see if a very small sample size (n = 10) would at least include 0.4 in it’s 95% Credible Interval. Last, demonstrate at what sample size that 95% CL first begins to include 0.4 when we have a strong prior. How much data do we really need to overcome our prior belief? Note, it takes a long time to fit these models, so, try a strategy of spacing out the 3-4 sample sizes, and then zoom in on an interesting region.
+This data set is pretty big. After excluding NAs in the variables we’re interested in, it’s over 766 lines of data! Now, a lot of data can overhwelm a strong prior. But only to a point. Show first that there is enough data here that a prior for the slope with an estimate of 0.4 and a sd of 0.01 is overwhelmed by the data by demonstrating that it produces similar results to our already fit flat prior. 
+
+```{r samp_size_validation, echo = TRUE, eval = TRUE}
+
+```
+
+
+Second, see if a very small sample size (n = 10) would at least include 0.4 in it’s 95% Credible Interval. Last, demonstrate at what sample size that 95% CL first begins to include 0.4 when we have a strong prior. How much data do we really need to overcome our prior belief? Note, it takes a long time to fit these models, so, try a strategy of spacing out the 3-4 sample sizes, and then zoom in on an interesting region.
+
+```{r prior_power, echo = TRUE, eval = TRUE}
+
+
+```
 
 # 6. Extra Credit 
 Make an election forecast as discussed at https://biol607.github.io/extra.html - but this isn’t just a winner prediction. 1 point for the correct winner. 5 points for correctly predicting the popular vote and being within 10% (3% just for trying!). 5 points for predicting the electoral college and geting no more than 5 states wrong (3 points just for trying). 5 points for predicting the senate races getting no more than 5 states wrong (3 points just for trying). 1 extra point for each vote percentage within your 80% Confidence/Credible Interval. Ditto for the house races.
@@ -340,6 +360,40 @@ Theoretically, you could almost pass this exam just by good forecasts.
 
 #sapply(400:420, function(y) seal_TakeTheP(sapply(rep(y,10), function(x) seal_pval(sigma = x))))
 #sapply(400:420, function(x) seal_TakeTheP(sigma = x))
+
+# Inspect chains and posteriors
+plot(quail_mod)
+
+#Inspect rhat
+mcmc_rhat(rhat(quail_mod))
+
+#Inspect Autocorrelation
+mcmc_acf(as.data.frame(quail_mod))
+
+#model assumptions
+quail_fit <- predict(quail_mod) %>% as_tibble
+quail_res <- residuals(quail_mod)%>% as_tibble
+
+qplot(quail_res$Estimate, quail_fit$Estimate)
+
+#fit
+pp_check(quail_mod, type="scatter")
+
+#normality
+qqnorm(quail_res$Estimate)
+qqline(quail_res$Estimate)
+pp_check(quail_mod, type="error_hist", bins=8)
+
+##match to posterior
+pp_check(quai_mod, type="stat_2d", test=c("mean", "sd"))
+pp_check(quail_mod, nsamples = 100)
+
+#coefficients
+summary(quail_mod, digits=5)
+
+#confidence intervals
+posterior_interval(quail_mod)
+
 
 ```
 
