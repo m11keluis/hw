@@ -359,7 +359,7 @@ bayes_fit %>%
 __General Observations for 5.1__
 1) ls_fit = residuals, shapiro test (p<0.05), and cook's distance (<1) ensured normality and homeostacity
 2) lh_fit = residuals, shapiro test (p<0.05), and cook's distance (<1) ensured normality and homeostacity
-3) bayes_fit = rhat (1), qqplot (no large or systematic deviations), pp_check (nice cluster), an ensured normality and homeostacity
+3) bayes_fit = rhat (1), qqplot (no large or systematic deviations), pp_check (nice cluster), and ensured normality and homeostacity
 
 
 ## 5.2 Three interpretations

@@ -1,0 +1,323 @@
+---
+title:
+output:
+  revealjs::revealjs_presentation:
+    reveal_options:
+      slideNumber: true
+      previewLinks: true
+    theme: white
+    center: false
+    transition: fade
+    self_contained: false
+    lib_dir: libs
+    css: style.css
+---
+
+```{r prep, echo=FALSE, cache=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+opts_chunk$set(fig.height=4.5, comment=NA, 
+               warning=FALSE, message=FALSE, 
+               dev="jpeg", echo=FALSE)
+
+# Load Libraries
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(rgdal)
+library(tidyr)
+library(sf)
+library(broom)
+library(car)
+library(visreg)
+library(emmeans)
+library(knitr)
+library(dplyr)
+library(raster)
+
+```
+
+## Detecting Hawaiian Coral Reef Bleaching with Bayesian Models
+![image](~/Desktop/mauiBleaching/LuisK_FinalP/bleachingTitle.jpg)
+
+Kelly Luis 
+
+<small> PhD Student in Marine Science and Technology </small>
+
+## Relevant Background
+![image](~/Desktop/mauiBleaching/LuisK_FinalP/bleachingBackground.png){height=600px}
+
+## Steps in Statistical __Bleaching__ Modeling
+
+1. What is your question? __Can a Bayesian approach identify combinations of environmental parameters predictive of Hawaiian Coral Reef Bleaching?__    
+2. What model of the world matches your question? __Probably WHOLLY non-linear, but test linear first__    
+3. Build a test: __glm or stan_glm -> family=binomial(link="logit")__
+4. Evaluate test assumptions: __Good Question__     
+5. Evaluate test results: __Chisq and Logit Coefficients__    
+6. Visualize: __Maps.. for now__
+
+## Datasets
+
+1. Diver Surveys (Transect and Photo):    
+    + Site
+    + Depth
+    + Habitat
+    + Health Status
+    
+2. Remote Sensing (MODIS, VIIRS, WindScat, AVHRR, etc.):    
+    + Sea Surface Temperature (SST)
+    + Photosynthetically Available Radiation (PAR)
+    + Wind Speed
+
+## Transect Coordinates by Site
+
+```{r wrangle_data}
+# Set Working Directory
+setwd("/Users/Kelly/Desktop/mauiBleaching/")
+
+# Read Data 
+booleanHealth <- read_csv("BooleanHealth_ByPhoto.csv")
+pictureCover <- read_csv("PercentCoverByPicture.csv")
+transectCover <- read_csv("PercentCoverByTransect.csv")
+transectHealth <- read_csv("PercentHealthByTransect.csv")
+
+# Boolean Health
+booleanHealth <- booleanHealth %>% 
+  mutate(AOI = factor(AOI),
+         TransectID = factor(TransectID),
+         Habitat = factor(Habitat),
+         HealthStatus = factor(HealthStatus),
+         Date = as.Date(Date,"%m/%d/%Y"),
+         Longitude = ifelse(Longitude > 0, -Longitude, Longitude),
+         Latitude = abs(Latitude))
+
+# Percent Cover by Picture
+pictureCover <- pictureCover %>% 
+  mutate(Site = factor(Site),
+         TransectID = factor(TransectID),
+         Longitude = ifelse(Longitude > 0, -Longitude, Longitude),
+         Latitude = abs(Latitude))
+
+# Percent Cover By Transect
+transectCover <- transectCover %>% 
+  mutate(Site = factor(Site),
+         TransectID = factor(TransectID),
+         Habitat = factor(Habitat),
+         Longitude = ifelse(Longitude > 0, -Longitude, Longitude),
+         Latitude = abs(Latitude))
+
+# Percent Health by Transect
+transectHealth  <- transectHealth %>% 
+  mutate(Site = factor(Site),
+         TransectID = factor(TransectID),
+         Habitat = factor(Habitat),
+         Longitude = as.numeric(Longitude),
+         Longitude = ifelse(Longitude > 0, -Longitude, Longitude),
+         Latitude = abs(as.numeric(Latitude)))
+
+
+# Remove rows without all column information 
+booleanHealth <- booleanHealth[complete.cases(booleanHealth), ]
+pictureCover <- pictureCover[complete.cases(pictureCover), ]
+transectCover <- transectCover[complete.cases(transectCover), ]
+transectHealth <- transectHealth[complete.cases(transectHealth), ]
+
+# Summary Information
+
+# Transect Health
+transectH <- transectHealth %>% 
+  group_by(FiscalYear,Latitude,Longitude, Site, Depth, Habitat, Bleached) %>% 
+  summarize(Count = n())
+
+# Transect Cover
+transectC <- transectCover %>% 
+  group_by(Latitude,Longitude, Site, Depth, Habitat, Coral) %>% 
+  summarize(Count = n())
+
+# Picture Cover
+pictureC <- pictureCover %>% 
+  group_by(Latitude,Longitude, Site, Depth, Habitat, Coral) %>% 
+  summarize(Count = n())
+
+# Boolean health
+booleanH <- booleanHealth %>% 
+  group_by(FiscalYear,Latitude,Longitude, AOI, Depth, Habitat, HealthStatus) %>% 
+  summarize(Count = n())
+```
+
+```{r echo=FALSE, cache=FALSE, message=FALSE, warning=FALSE}
+# Load Maui Coastline from Shapefile
+AOI <- st_read("/Users/Kelly/Desktop/mauiBleaching/coast_n83.shp/coast_n83.shp")
+AOI_cfs <- st_transform(AOI, "+proj=latlong")
+```
+
+```{r map}
+# Maui Visualization Function 
+plot_maui_map <- function(dataframe, longitude, latitude, variable){
+  
+  mapped_variable <- ggplot() + 
+  geom_sf(data = AOI_cfs, color = "black", fill = 'seashell', size = 0.6) + 
+  coord_sf(xlim = c(-156.7,-156), ylim = c(20.45, 21.05)) +
+  geom_point(data = dataframe, aes_string(x = longitude, y = latitude, color = variable)) +
+    xlab("Longitude (°)") + ylab("Latitude (°)") + labs(color=variable) +
+    theme(panel.background = element_rect(color = 'black', fill = 'white'), 
+        panel.grid = element_line(color = 'white'))
+  
+  mapped_variable
+}
+
+# Plot Visualizations
+tr_site_map <- plot_maui_map(transectH, "Longitude", "Latitude", "Site")
+tr_site_map
+
+```
+
+## Another Visualization of Transect Data 
+
+```{r}
+# Plot Bleached vs. Depth by Site and Habitat Type
+site_plot <- ggplot(data = transectH, 
+                     aes(x = Bleached, y = Depth, color = Site)) + 
+  geom_point() + facet_wrap(~Habitat) + 
+  xlab('% Bleached Coral') +
+  ylab('Depth (m)') +
+  ggtitle('% Bleached Coral by Habitat and Site') + 
+  theme_bw()
+
+site_plot
+```
+
+## Preliminary Logistic Model
+```{r}
+
+bleach_glm <- glm((Bleached/100) ~ Depth + Habitat + Site,
+                  family = binomial(link = "logit"),
+                  data = transectH)
+
+knitr::kable(Anova(bleach_glm))
+```
+
+## Future Direction
+- Finish satellite processing -> link with diver coordinates
+- Think about non-linear transformations: bounded data? arcsin?
+- Possion GLM with Coral Count from Diver Photos?
+- Integration of NEW Datasets (NOAA 2019)
+- __Bayes?__
+
+Thoughts or Suggestions?
+
+## Mahalo Nui!
+
+## Bonus Round!!
+..or more like a mixture of follow up and uninformative plots
+
+## Transect Health
+```{r}
+pairs(transectH)
+```
+
+## Transect Coordiantes by Depth
+```{r}
+tr_depth_map <- plot_maui_map(transectH, "Longitude", "Latitude", "Depth")
+tr_depth_map
+```
+
+## Transect Coordiantes by Habitat
+```{r}
+tr_hab_map <- plot_maui_map(transectH, "Longitude", "Latitude", "Habitat")
+tr_hab_map + guides(col=guide_legend(ncol=2)) 
+```
+
+## Transect Coordinates by Bleached %
+```{r}
+tr_hab_map <- plot_maui_map(transectH, "Longitude", "Latitude", "Bleached")
+tr_hab_map
+```
+
+## Frequentist Land of Linear Models
+```{r}
+transect_lm <- lm(Bleached ~ Depth + Site + Habitat, data=transectH)
+knitr::kable(Anova(transect_lm))
+```
+
+## Residuals
+```{r message=FALSE, warning=FALSE}
+par(mfrow=c(2,2))
+plot(transect_lm, which=c(1,2,5), cex.lab=1.4)
+par(mfrow=c(1,1))
+```
+
+## Grouped Residuals
+```{r}
+residualPlots(transect_lm, cex.lab=1.4, test=FALSE)
+```
+
+## Pattern in Fitted vs. Residuals
+```{r}
+residualPlot(transect_lm, variable="fitted", type="response")
+```
+
+## Tukey?
+```{r}
+knitr::kable(residualPlots(transect_lm, plot=F))
+```
+
+
+
+
+## Boolean Health by Picture
+```{r}
+pairs(booleanH)
+```
+
+## Picture Coordiantes by Depth
+```{r}
+tr_depth_map <- plot_maui_map(booleanH, "Longitude", "Latitude", "Depth")
+tr_depth_map
+```
+
+## Picture Coordiantes by Habitat
+```{r}
+tr_hab_map <- plot_maui_map(booleanH, "Longitude", "Latitude", "Habitat")
+tr_hab_map + guides(col=guide_legend(ncol=2)) 
+```
+
+## Picture Coordinates by Bleached Count
+```{r}
+booleanB <- booleanH %>% 
+  filter(HealthStatus == "Bleached")
+
+tr_hab_map <- plot_maui_map(booleanB, "Longitude", "Latitude", "Count")
+tr_hab_map
+```
+
+## Linear Model of Picture Bleached Counts
+```{r}
+transectCount_lm <- lm(Count ~ Depth + AOI + Habitat, data=booleanB)
+knitr::kable(Anova(transectCount_lm))
+
+```
+
+## Residuals
+```{r message=FALSE, warning=FALSE}
+par(mfrow=c(2,2))
+plot(transectCount_lm, which=c(1,2,5), cex.lab=1.4)
+par(mfrow=c(1,1))
+```
+
+## Grouped Residuals
+```{r}
+residualPlots(transectCount_lm, cex.lab=1.4, test=FALSE)
+```
+
+## Pattern in Fitted vs. Residuals
+```{r}
+residualPlot(transectCount_lm, variable="fitted", type="response")
+```
+
+## Tukey?
+```{r}
+knitr::kable(residualPlots(transectCount_lm, plot=F))
+```
+
+
